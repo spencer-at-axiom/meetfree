@@ -1,9 +1,8 @@
-use serde::{Deserialize, Serialize};
-use anyhow::{Result, anyhow};
+use anyhow::{anyhow, Result};
 use log::info as log_info;
+use serde::{Deserialize, Serialize};
 use std::path::PathBuf;
 use tauri::{AppHandle, Runtime};
-use dirs;
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct NotificationSettings {
@@ -112,10 +111,11 @@ impl<R: Runtime> ConsentManager<R> {
 
     /// Get the path where notification settings are stored
     fn get_settings_path() -> Result<PathBuf> {
-        let mut path = dirs::config_dir()
+        let mut roots = crate::brand::config_roots_with_legacy();
+        let mut path = roots
+            .drain(..1)
+            .next()
             .ok_or_else(|| anyhow!("Could not find config directory"))?;
-
-        path.push("meetily");
         path.push("notifications.json");
 
         // Ensure parent directory exists
@@ -128,16 +128,33 @@ impl<R: Runtime> ConsentManager<R> {
 
     /// Load notification settings from disk
     pub async fn load_settings(&self) -> Result<NotificationSettings> {
-        if !self.settings_path.exists() {
-            log_info!("No notification settings file found, using defaults");
-            return Ok(NotificationSettings::default());
+        if self.settings_path.exists() {
+            let content = tokio::fs::read_to_string(&self.settings_path).await?;
+            let settings: NotificationSettings = serde_json::from_str(&content)?;
+            log_info!("Loaded notification settings from disk");
+            return Ok(settings);
         }
 
-        let content = tokio::fs::read_to_string(&self.settings_path).await?;
-        let settings: NotificationSettings = serde_json::from_str(&content)?;
+        let legacy_paths: Vec<PathBuf> = crate::brand::config_roots_with_legacy()
+            .into_iter()
+            .skip(1)
+            .map(|p| p.join("notifications.json"))
+            .collect();
 
-        log_info!("Loaded notification settings from disk");
-        Ok(settings)
+        for legacy_path in legacy_paths {
+            if legacy_path.exists() {
+                let content = tokio::fs::read_to_string(&legacy_path).await?;
+                let settings: NotificationSettings = serde_json::from_str(&content)?;
+                log_info!(
+                    "Loaded legacy notification settings from {}",
+                    legacy_path.display()
+                );
+                return Ok(settings);
+            }
+        }
+
+        log_info!("No notification settings file found, using defaults");
+        Ok(NotificationSettings::default())
     }
 
     /// Save notification settings to disk
@@ -251,8 +268,11 @@ pub fn get_default_settings() -> NotificationSettings {
 pub fn validate_settings(settings: &NotificationSettings) -> Result<()> {
     // Validate meeting reminder minutes
     for &minutes in &settings.notification_preferences.meeting_reminder_minutes {
-        if minutes > 1440 { // More than 24 hours
-            return Err(anyhow!("Meeting reminder cannot be more than 24 hours (1440 minutes)"));
+        if minutes > 1440 {
+            // More than 24 hours
+            return Err(anyhow!(
+                "Meeting reminder cannot be more than 24 hours (1440 minutes)"
+            ));
         }
     }
 

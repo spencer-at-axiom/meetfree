@@ -20,13 +20,13 @@ The native app exposes commands to:
 
 ## Custom Template Location
 
-Custom templates are loaded from the app data directory under `Meetily/templates`.
+Custom templates are loaded from the app data directory under `Meetfree/templates`.
 
 Examples used by the loader:
 
-- macOS: `~/Library/Application Support/Meetily/templates/`
-- Windows: `%APPDATA%\\Meetily\\templates\\`
-- Linux: `~/.config/Meetily/templates/`
+- macOS: `~/Library/Application Support/Meetfree/templates/`
+- Windows: `%APPDATA%\\Meetfree\\templates\\`
+- Linux: `~/.config/Meetfree/templates/`
 
 ## Template Shape
 

@@ -28,6 +28,7 @@ enum Request {
         max_tokens: Option<i32>,
         context_size: Option<u32>,
         model_path: Option<String>,
+        model_layer_count: Option<u32>,
         // Sampling parameters
         temperature: Option<f32>,
         top_k: Option<i32>,
@@ -52,9 +53,8 @@ lazy_static::lazy_static! {
 }
 
 // Model path cache to avoid repeated filesystem I/O and model lookups
-static MODEL_PATH_CACHE: Lazy<RwLock<HashMap<String, PathBuf>>> = Lazy::new(|| {
-    RwLock::new(HashMap::new())
-});
+static MODEL_PATH_CACHE: Lazy<RwLock<HashMap<String, PathBuf>>> =
+    Lazy::new(|| RwLock::new(HashMap::new()));
 
 /// Initialize the global sidecar manager
 pub async fn init_sidecar_manager(app_data_dir: PathBuf) -> Result<()> {
@@ -151,8 +151,7 @@ pub async fn generate_with_builtin(
     let model_path = get_cached_model_path(app_data_dir, model_name)?;
 
     // Apply model-specific chat template
-    let formatted_prompt =
-        models::format_prompt(&model_def.template, system_prompt, user_prompt)?;
+    let formatted_prompt = models::format_prompt(&model_def.template, system_prompt, user_prompt)?;
     // Get or initialize sidecar manager
     let manager = {
         let mut global_manager = SIDECAR_MANAGER.lock().await;
@@ -180,6 +179,7 @@ pub async fn generate_with_builtin(
         max_tokens: Some(models::DEFAULT_MAX_TOKENS),
         context_size: Some(model_def.context_size),
         model_path: Some(model_path.to_string_lossy().to_string()),
+        model_layer_count: Some(model_def.layer_count),
         temperature: Some(model_def.sampling.temperature),
         top_k: Some(model_def.sampling.top_k),
         top_p: Some(model_def.sampling.top_p),
@@ -300,6 +300,7 @@ mod tests {
             max_tokens: Some(512),
             context_size: Some(2048),
             model_path: Some("/path/to/model.gguf".to_string()),
+            model_layer_count: Some(26),
             temperature: Some(1.0),
             top_k: Some(64),
             top_p: Some(0.95),
@@ -310,6 +311,7 @@ mod tests {
         assert!(json.contains("\"type\":\"generate\""));
         assert!(json.contains("\"prompt\":\"test prompt\""));
         assert!(json.contains("\"max_tokens\":512"));
+        assert!(json.contains("\"model_layer_count\":26"));
         assert!(json.contains("\"temperature\":1.0"));
     }
 
@@ -338,5 +340,62 @@ mod tests {
             }
             _ => panic!("Wrong response type"),
         }
+    }
+
+    #[tokio::test]
+    async fn test_generate_with_builtin_cancellation_shuts_down_sidecar() {
+        use std::fs;
+
+        use tempfile::tempdir;
+        use tokio::time::{sleep, Duration};
+        use tokio_util::sync::CancellationToken;
+
+        let _guard = crate::summary::summary_engine::test_utils::test_env_lock();
+        crate::summary::summary_engine::test_utils::clear_test_env();
+        crate::summary::summary_engine::test_utils::set_fake_helper_env();
+
+        {
+            let mut global_manager = SIDECAR_MANAGER.lock().await;
+            *global_manager = None;
+        }
+
+        let app_data_dir = tempdir().unwrap();
+        let model_path = app_data_dir
+            .path()
+            .join("models")
+            .join("summary")
+            .join("gemma-3-1b-it-Q8_0.gguf");
+        fs::create_dir_all(model_path.parent().unwrap()).unwrap();
+        fs::write(&model_path, b"fake model").unwrap();
+
+        let token = CancellationToken::new();
+        let cancel_clone = token.clone();
+        let app_data_path = app_data_dir.path().to_path_buf();
+
+        let handle = tokio::spawn(async move {
+            generate_with_builtin(
+                &app_data_path,
+                "gemma3:1b",
+                "system",
+                "TEST_CANCEL",
+                Some(&cancel_clone),
+            )
+            .await
+        });
+
+        sleep(Duration::from_millis(100)).await;
+        token.cancel();
+
+        let result = handle.await.unwrap();
+        let error = result.expect_err("generation should have been cancelled");
+        assert!(error.to_string().contains("cancelled"));
+        assert!(!is_sidecar_healthy().await);
+
+        {
+            let mut global_manager = SIDECAR_MANAGER.lock().await;
+            *global_manager = None;
+        }
+
+        crate::summary::summary_engine::test_utils::clear_test_env();
     }
 }

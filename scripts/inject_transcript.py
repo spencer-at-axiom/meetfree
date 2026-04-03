@@ -2,7 +2,7 @@
 """
 Meeting Transcript Database Injector
 
-Injects CSV-based transcript data into the Meetily SQLite database,
+Injects CSV-based transcript data into the Meetfree SQLite database,
 creating meeting entries identical to those from normal recordings.
 
 Usage:
@@ -27,21 +27,31 @@ from pathlib import Path
 
 
 def get_default_db_path() -> Path:
-    """Get the default database path based on the platform."""
+    """Get default DB path (prefers Meetfree, falls back to legacy Meetily)."""
     system = platform.system()
+    candidates: list[Path]
 
     if system == "Darwin":  # macOS
-        base_path = Path.home() / "Library" / "Application Support" / "Meetily"
+        app_support = Path.home() / "Library" / "Application Support"
+        candidates = [app_support / "Meetfree", app_support / "Meetily"]
     elif system == "Windows":
         appdata = os.environ.get("APPDATA", "")
         if appdata:
-            base_path = Path(appdata) / "Meetily"
+            appdata_path = Path(appdata)
+            candidates = [appdata_path / "Meetfree", appdata_path / "Meetily"]
         else:
-            base_path = Path.home() / "AppData" / "Roaming" / "Meetily"
+            roaming = Path.home() / "AppData" / "Roaming"
+            candidates = [roaming / "Meetfree", roaming / "Meetily"]
     else:  # Linux and others
-        base_path = Path.home() / ".config" / "Meetily"
+        config = Path.home() / ".config"
+        candidates = [config / "Meetfree", config / "Meetily"]
 
-    return base_path / "meeting_minutes.sqlite"
+    for base_path in candidates:
+        db_path = base_path / "meeting_minutes.sqlite"
+        if db_path.exists():
+            return db_path
+
+    return candidates[0] / "meeting_minutes.sqlite"
 
 
 def estimate_duration(text: str) -> float:
@@ -227,7 +237,7 @@ def verify_injection(db_path: str, meeting_id: str) -> dict:
 
 def main():
     parser = argparse.ArgumentParser(
-        description="Inject CSV transcript data into Meetily database",
+        description="Inject CSV transcript data into Meetfree database",
         formatter_class=argparse.RawDescriptionHelpFormatter,
         epilog="""
 CSV Format (minimal - just 'text' column required):
@@ -281,7 +291,10 @@ Example usage:
 
     if not db_path.exists():
         print(f"Error: Database not found at {db_path}", file=sys.stderr)
-        print("Make sure Meetily has been run at least once to create the database.", file=sys.stderr)
+        print(
+            "Make sure Meetfree has been run at least once to create the database.",
+            file=sys.stderr,
+        )
         sys.exit(1)
 
     # Resolve CSV path
@@ -344,7 +357,7 @@ Example usage:
     except Exception as e:
         print(f"Warning: Verification failed: {e}", file=sys.stderr)
 
-    print("\nThe meeting should now appear in the Meetily sidebar.")
+    print("\nThe meeting should now appear in the Meetfree sidebar.")
 
 
 if __name__ == "__main__":

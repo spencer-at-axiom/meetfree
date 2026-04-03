@@ -12,7 +12,7 @@ This policy describes the behavior of the code in this repository.
 
 ## Optional External Providers
 
-Meetily can generate summaries with external providers if you configure and select them.
+Meetfree can generate summaries with external providers if you configure and select them.
 
 The current codebase supports:
 

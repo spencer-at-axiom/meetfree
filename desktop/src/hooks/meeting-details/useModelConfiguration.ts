@@ -20,7 +20,7 @@ export function useModelConfiguration() {
       setIsLoading(true);
       try {
         console.log('🔄 Fetching model configuration from database...');
-        const data = await invokeTauri('api_get_model_config', {}) as any;
+        const data = await invokeTauri('model_cfg_get', {}) as any;
         if (data && data.provider !== null) {
           console.log('✅ Loaded model config from database:', {
             provider: data.provider,
@@ -32,7 +32,7 @@ export function useModelConfiguration() {
           // Fetch API key if not included and provider requires it
           if (data.provider !== 'ollama' && data.provider !== 'custom-openai' && !data.apiKey) {
             try {
-              const apiKeyData = await invokeTauri('api_get_api_key', {
+              const apiKeyData = await invokeTauri('model_api_key_get', {
                 provider: data.provider
               }) as string;
               data.apiKey = apiKeyData;
@@ -44,7 +44,7 @@ export function useModelConfiguration() {
           // Fetch custom OpenAI config if provider is custom-openai
           if (data.provider === 'custom-openai') {
             try {
-              const customConfig = await invokeTauri('api_get_custom_openai_config') as any;
+              const customConfig = await invokeTauri('custom_openai_cfg_get') as any;
               if (customConfig) {
                 data.customOpenAIDisplayName = customConfig.displayName || null;
                 data.customOpenAIEndpoint = customConfig.endpoint || null;
@@ -127,7 +127,7 @@ export function useModelConfiguration() {
         );
       }
 
-      await invokeTauri('api_save_model_config', {
+      await invokeTauri('model_cfg_set', {
         provider: payload.provider,
         model: payload.model,
         whisperModel: payload.whisperModel,

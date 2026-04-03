@@ -1,6 +1,6 @@
 # GPU Acceleration
 
-Meetily's desktop app exposes build-time acceleration options through Cargo features and helper scripts.
+Meetfree's desktop app exposes build-time acceleration options through Cargo features and helper scripts.
 
 ## Auto-Detection Script
 

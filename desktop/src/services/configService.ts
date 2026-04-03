@@ -51,7 +51,7 @@ export class ConfigService {
    * @returns Promise with { provider, model, apiKey }
    */
   async getTranscriptConfig(): Promise<TranscriptModelProps> {
-    return invoke<TranscriptModelProps>('api_get_transcript_config');
+    return invoke<TranscriptModelProps>('transcript_cfg_get');
   }
 
   /**
@@ -59,7 +59,7 @@ export class ConfigService {
    * @returns Promise with { provider, model, whisperModel }
    */
   async getModelConfig(): Promise<ModelConfig> {
-    return invoke<ModelConfig>('api_get_model_config');
+    return invoke<ModelConfig>('model_cfg_get');
   }
 
   /**
@@ -75,7 +75,7 @@ export class ConfigService {
    * @returns Promise with CustomOpenAIConfig or null if not configured
    */
   async getCustomOpenAIConfig(): Promise<CustomOpenAIConfig | null> {
-    return invoke<CustomOpenAIConfig | null>('api_get_custom_openai_config');
+    return invoke<CustomOpenAIConfig | null>('custom_openai_cfg_get');
   }
 
   /**
@@ -84,7 +84,7 @@ export class ConfigService {
    * @returns Promise with result status
    */
   async saveCustomOpenAIConfig(config: CustomOpenAIConfig): Promise<{ status: string; message: string }> {
-    return invoke<{ status: string; message: string }>('api_save_custom_openai_config', {
+    return invoke<{ status: string; message: string }>('custom_openai_cfg_set', {
       endpoint: config.endpoint,
       apiKey: config.apiKey,
       model: config.model,
@@ -106,7 +106,7 @@ export class ConfigService {
     apiKey: string | null,
     model: string
   ): Promise<{ status: string; message: string; http_status?: number }> {
-    return invoke<{ status: string; message: string; http_status?: number }>('api_test_custom_openai_connection', {
+    return invoke<{ status: string; message: string; http_status?: number }>('custom_openai_conn_test', {
       endpoint,
       apiKey,
       model,

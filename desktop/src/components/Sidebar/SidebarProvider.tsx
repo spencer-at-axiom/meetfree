@@ -79,7 +79,7 @@ export function SidebarProvider({ children }: { children: React.ReactNode }) {
   // Extract fetchMeetings as a reusable function
   const fetchMeetings = React.useCallback(async () => {
     try {
-      const meetings = await invoke('api_get_meetings') as Array<{ id: string, title: string }>;
+      const meetings = await invoke('meetings_list') as Array<{ id: string, title: string }>;
       const transformedMeetings = meetings.map((meeting: any) => ({
         id: meeting.id,
         title: meeting.title
@@ -158,7 +158,7 @@ export function SidebarProvider({ children }: { children: React.ReactNode }) {
       setIsSearching(true);
 
 
-      const results = await invoke('api_search_transcripts', { query }) as TranscriptSearchResult[];
+      const results = await invoke('transcript_search', { query }) as TranscriptSearchResult[];
       setSearchResults(results);
     } catch (error) {
       console.error('Error searching transcripts:', error);

@@ -35,7 +35,7 @@ export default function SettingsPage() {
   useEffect(() => {
     const loadTranscriptConfig = async () => {
       try {
-        const config = await invoke('api_get_transcript_config') as any;
+        const config = await invoke('transcript_cfg_get') as any;
         if (config) {
           console.log('Loaded saved transcript config:', config);
           setTranscriptModelConfig({

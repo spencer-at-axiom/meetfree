@@ -26,8 +26,8 @@ if "%~1" == "debug" (
     set "DEBUG=false"
 )
 
-echo 🚀 Building Meetily application...
-echo 🔨 Building Tauri application...
+echo ?? Building Meetily application...
+echo ?? Building Tauri application...
 
 REM Kill any existing processes on port 3118
 echo Checking for existing processes on port 3118...
@@ -55,15 +55,15 @@ if exist "C:\Program Files (x86)\Microsoft Visual Studio\2022\BuildTools\VC\Auxi
     
     REM Verify critical libraries exist
     if exist "C:\Program Files (x86)\Windows Kits\10\Lib\10.0.22621.0\um\x64\kernel32.lib" (
-        echo ✓ kernel32.lib found
+        echo ? kernel32.lib found
     ) else (
-        echo ✗ kernel32.lib NOT found - Windows SDK issue
+        echo ? kernel32.lib NOT found - Windows SDK issue
     )
     
     if exist "C:\Program Files (x86)\Microsoft Visual Studio\2022\BuildTools\VC\Tools\MSVC\14.44.35207\lib\x64\msvcrt.lib" (
-        echo ✓ msvcrt.lib found in Visual Studio MSVC
+        echo ? msvcrt.lib found in Visual Studio MSVC
     ) else (
-        echo ✗ msvcrt.lib NOT found - C++ runtime issue
+        echo ? msvcrt.lib NOT found - C++ runtime issue
     )
 ) else if exist "C:\Program Files\Microsoft Visual Studio\2022\BuildTools\VC\Auxiliary\Build\vcvars64.bat" (
     echo Setting up Visual Studio 2022 Build Tools environment...
@@ -108,7 +108,7 @@ if "%~1" == "debug" (
     echo Starting development mode...
     echo Running initial compilation check...
    
-    echo ✅ Initial compilation check passed. Starting development server...
+    echo ? Initial compilation check passed. Starting development server...
     call pnpm run tauri dev
     if errorlevel 1 (
         echo Error: Failed to start Tauri development server
@@ -120,12 +120,12 @@ if "%~1" == "debug" (
     cargo check --no-default-features
     if errorlevel 1 (
         echo.
-        echo ❌ Error: Cargo check failed - fix the compilation errors above
+        echo ? Error: Cargo check failed - fix the compilation errors above
         cd ..
         exit /b 1
     ) else (
         echo.
-        echo ✅ Cargo check passed successfully!
+        echo ? Cargo check passed successfully!
         cd ..
         exit /b 0
     )
@@ -133,10 +133,10 @@ if "%~1" == "debug" (
     echo Building for production...
     echo Running pre-build compilation check...
    
-    echo ✅ Pre-build check passed. Building for production...
+    echo ? Pre-build check passed. Building for production...
     call pnpm run tauri build
     if errorlevel 1 (
-        echo ❌ Error: Failed to build Tauri application for production
+        echo ? Error: Failed to build Tauri application for production
         exit /b 1
     )
 )

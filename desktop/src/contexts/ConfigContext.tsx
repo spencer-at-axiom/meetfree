@@ -298,7 +298,7 @@ export function ConfigProvider({ children }: { children: ReactNode }) {
         const providers = ['claude', 'groq', 'openai', 'openrouter'];
         const keys = await Promise.all(
           providers.map(p =>
-            invoke<string>('api_get_api_key', { provider: p })
+            invoke<string>('model_api_key_get', { provider: p })
               .catch(() => null) // Gracefully handle missing keys
           )
         );

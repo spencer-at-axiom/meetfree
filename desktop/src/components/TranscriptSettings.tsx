@@ -42,7 +42,7 @@ export function TranscriptSettings({ transcriptModelConfig, setTranscriptModelCo
     const fetchApiKey = async (provider: string) => {
         try {
 
-            const data = await invoke('api_get_transcript_api_key', { provider }) as string;
+            const data = await invoke('transcript_api_key_get', { provider }) as string;
 
             setApiKey(data || '');
         } catch (err) {

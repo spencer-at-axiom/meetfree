@@ -201,7 +201,7 @@ export function ModelSettingsModal({
 
   const fetchApiKey = async (provider: string) => {
     try {
-      const data = (await invoke('api_get_api_key', {
+      const data = (await invoke('model_api_key_get', {
         provider,
       })) as string;
       setApiKey(data || '');
@@ -259,14 +259,14 @@ export function ModelSettingsModal({
       }
 
       try {
-        const data = (await invoke('api_get_model_config')) as any;
+        const data = (await invoke('model_cfg_get')) as any;
         if (data && data.provider !== null) {
           setModelConfig(data);
 
           // Fetch API key if not included in response and provider requires it
           if (data.provider !== 'ollama' && !data.apiKey) {
             try {
-              const apiKeyData = await invoke('api_get_api_key', {
+              const apiKeyData = await invoke('model_api_key_get', {
                 provider: data.provider
               }) as string;
               data.apiKey = apiKeyData;
@@ -286,7 +286,7 @@ export function ModelSettingsModal({
           // Fetch Custom OpenAI config if that's the active provider
           if (data.provider === 'custom-openai') {
             try {
-              const customConfig = (await invoke('api_get_custom_openai_config')) as any;
+              const customConfig = (await invoke('custom_openai_cfg_get')) as any;
               if (customConfig) {
                 setCustomOpenAIEndpoint(customConfig.endpoint || '');
                 setCustomOpenAIModel(customConfig.model || '');
@@ -614,7 +614,7 @@ export function ModelSettingsModal({
     // For custom-openai provider, save the custom config first
     if (modelConfig.provider === 'custom-openai') {
       try {
-        await invoke('api_save_custom_openai_config', {
+        await invoke('custom_openai_cfg_set', {
           endpoint: customOpenAIEndpoint.trim(),
           apiKey: customOpenAIApiKey.trim() || null,
           model: customOpenAIModel.trim(),
@@ -673,7 +673,7 @@ export function ModelSettingsModal({
 
     setIsTestingConnection(true);
     try {
-      const result = await invoke<{ status: string; message: string }>('api_test_custom_openai_connection', {
+      const result = await invoke<{ status: string; message: string }>('custom_openai_conn_test', {
         endpoint: customOpenAIEndpoint.trim(),
         apiKey: customOpenAIApiKey.trim() || null,
         model: customOpenAIModel.trim(),
@@ -732,7 +732,7 @@ export function ModelSettingsModal({
           duration: 7000,
           action: {
             label: 'Download',
-            onClick: () => invoke('open_external_url', { url: 'https://ollama.com/download' })
+            onClick: () => invoke('external_url_open', { url: 'https://ollama.com/download' })
           }
         });
         // Update the installation status flag
@@ -851,7 +851,7 @@ export function ModelSettingsModal({
 
                 // Load custom OpenAI config when selected
                 if (provider === 'custom-openai') {
-                  invoke<any>('api_get_custom_openai_config').then((config) => {
+                  invoke<any>('custom_openai_cfg_get').then((config) => {
                     if (config) {
                       setCustomOpenAIEndpoint(config.endpoint || '');
                       setCustomOpenAIModel(config.model || '');
@@ -1229,7 +1229,7 @@ export function ModelSettingsModal({
                     <Button
                       variant="default"
                       size="sm"
-                      onClick={() => invoke('open_external_url', { url: 'https://ollama.com/download' })}
+                      onClick={() => invoke('external_url_open', { url: 'https://ollama.com/download' })}
                       className="w-full bg-blue-600 hover:bg-blue-700"
                     >
                       <ExternalLink className="mr-2 h-4 w-4" />

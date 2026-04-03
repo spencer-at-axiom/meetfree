@@ -12,7 +12,7 @@ Verified from the current toolchain and manifests:
 
 ### Windows Note
 
-`cargo check -p meetily` currently reaches `whisper-rs-sys`, which uses bindgen. On this machine the build required `libclang` to be available via `PATH` or `LIBCLANG_PATH`.
+`cargo check -p meetfree` currently reaches `whisper-rs-sys`, which uses bindgen. On this machine the build required `libclang` to be available via `PATH` or `LIBCLANG_PATH`.
 
 ## Desktop App
 
@@ -73,10 +73,10 @@ From the repository root:
 
 ```bash
 cargo metadata --no-deps --format-version 1
-cargo check -p meetily
+cargo check -p meetfree
 ```
 
-`cargo check -p meetily` also expects a built `llama-helper` binary to be available so the Tauri bundle step can copy it into [`desktop/src-tauri/binaries/`](../desktop/src-tauri/binaries/).
+`cargo check -p meetfree` also expects a built `llama-helper` binary to be available so the Tauri bundle step can copy it into [`desktop/src-tauri/binaries/`](../desktop/src-tauri/binaries/).
 
 ## What This Repo Does Not Require
 

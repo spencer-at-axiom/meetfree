@@ -360,7 +360,7 @@ export function useSummaryGeneration({
       console.log('📊 Fetching all transcripts for meeting:', meetingId);
 
       // First, get total count by fetching first page
-      const firstPage = await invokeTauri('api_get_meeting_transcripts', {
+      const firstPage = await invokeTauri('meeting_transcripts_get', {
         meetingId,
         limit: 1,
         offset: 0,
@@ -374,7 +374,7 @@ export function useSummaryGeneration({
       }
 
       // Fetch all transcripts in one call
-      const allData = await invokeTauri('api_get_meeting_transcripts', {
+      const allData = await invokeTauri('meeting_transcripts_get', {
         meetingId,
         limit: totalCount,
         offset: 0,
@@ -443,7 +443,7 @@ export function useSummaryGeneration({
               duration: 7000,
               action: {
                 label: 'Download',
-                onClick: () => invokeTauri('open_external_url', { url: 'https://ollama.com/download' })
+                onClick: () => invokeTauri('external_url_open', { url: 'https://ollama.com/download' })
               }
             }
           );

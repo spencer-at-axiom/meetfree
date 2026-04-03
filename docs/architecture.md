@@ -1,6 +1,6 @@
 # Architecture
 
-Meetily is a self-contained desktop application built with Tauri.
+Meetfree is a self-contained desktop application built with Tauri.
 
 ## High-Level Structure
 

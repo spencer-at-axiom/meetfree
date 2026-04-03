@@ -41,7 +41,7 @@ export class StorageService {
     transcripts: Transcript[],
     folderPath: string | null
   ): Promise<SaveMeetingResponse> {
-    return invoke<SaveMeetingResponse>('api_save_transcript', {
+    return invoke<SaveMeetingResponse>('transcript_save', {
       meetingTitle,
       transcripts,
       folderPath,
@@ -54,7 +54,7 @@ export class StorageService {
    * @returns Promise with meeting details
    */
   async getMeeting(meetingId: string): Promise<Meeting> {
-    return invoke<Meeting>('api_get_meeting', { meetingId });
+    return invoke<Meeting>('meeting_get', { meetingId });
   }
 
   /**
@@ -62,7 +62,7 @@ export class StorageService {
    * @returns Promise with array of meetings
    */
   async getMeetings(): Promise<Meeting[]> {
-    return invoke<Meeting[]>('api_get_meetings');
+    return invoke<Meeting[]>('meetings_list');
   }
 }
 

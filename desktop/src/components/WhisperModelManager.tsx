@@ -244,7 +244,7 @@ export function ModelManager({
 
   const saveModelSelection = async (modelName: string) => {
     try {
-      await invoke('api_save_transcript_config', {
+      await invoke('transcript_cfg_set', {
         provider: 'localWhisper',
         model: modelName,
         apiKey: null

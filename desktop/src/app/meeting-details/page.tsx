@@ -81,7 +81,7 @@ function MeetingDetailsContent() {
 
     try {
       // Check what's currently in database
-      const currentConfig = await invoke('api_get_model_config') as any;
+      const currentConfig = await invoke('model_cfg_get') as any;
 
       // If DB already has a model, use it (never override!)
       if (currentConfig && currentConfig.model) {
@@ -97,7 +97,7 @@ function MeetingDetailsContent() {
       if (hasGemma) {
         console.log('💾 DB empty, using gemma3:1b as initial default');
 
-        await invoke('api_save_model_config', {
+        await invoke('model_cfg_set', {
           provider: 'ollama',
           model: '',
           whisperModel: 'large-v3',

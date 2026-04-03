@@ -37,7 +37,7 @@ From the repository root:
 
 ```bash
 cargo metadata --no-deps --format-version 1
-cargo check -p meetily
+cargo check -p meetfree
 ```
 
 ## Documentation Standard

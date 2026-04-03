@@ -87,7 +87,7 @@ export default function PageContent({
   const handleSaveModelConfig = async (config?: ModelConfig) => {
     if (!config) return;
     try {
-      await invoke('api_save_model_config', {
+      await invoke('model_cfg_set', {
         provider: config.provider,
         model: config.model,
         whisperModel: config.whisperModel,

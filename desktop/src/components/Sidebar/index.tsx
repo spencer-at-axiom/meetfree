@@ -108,12 +108,12 @@ const Sidebar: React.FC = () => {
     // Note: Don't set hardcoded defaults - let DB be the source of truth
     const fetchModelConfig = async () => {
       try {
-        const data = await invoke('api_get_model_config') as any;
+        const data = await invoke('model_cfg_get') as any;
         if (data && data.provider !== null) {
           // Fetch API key if not included and provider requires it
           if (data.provider !== 'ollama' && !data.apiKey) {
             try {
-              const apiKeyData = await invoke('api_get_api_key', {
+              const apiKeyData = await invoke('model_api_key_get', {
                 provider: data.provider
               }) as string;
               data.apiKey = apiKeyData;
@@ -136,7 +136,7 @@ const Sidebar: React.FC = () => {
     // Note: Don't set hardcoded defaults - let DB be the source of truth
     const fetchTranscriptSettings = async () => {
       try {
-        const data = await invoke('api_get_transcript_config') as any;
+        const data = await invoke('transcript_cfg_get') as any;
         if (data && data.provider !== null) {
           setTranscriptModelConfig(data);
         }
@@ -172,7 +172,7 @@ const Sidebar: React.FC = () => {
   // Handle model config save
   const handleSaveModelConfig = async (config: ModelConfig) => {
     try {
-      await invoke('api_save_model_config', {
+      await invoke('model_cfg_set', {
         provider: config.provider,
         model: config.model,
         whisperModel: config.whisperModel,
@@ -206,7 +206,7 @@ const Sidebar: React.FC = () => {
       };
       console.log('Saving transcript config with payload:', payload);
 
-      await invoke('api_save_transcript_config', {
+      await invoke('transcript_cfg_set', {
         provider: payload.provider,
         model: payload.model,
         apiKey: payload.apiKey,
@@ -313,7 +313,7 @@ const Sidebar: React.FC = () => {
 
     try {
       const { invoke } = await import('@tauri-apps/api/core');
-      await invoke('api_delete_meeting', {
+      await invoke('meeting_delete', {
         meetingId: itemId,
       });
       console.log('Meeting deleted successfully');
@@ -371,7 +371,7 @@ const Sidebar: React.FC = () => {
     }
 
     try {
-      await invoke('api_save_meeting_title', {
+      await invoke('meeting_title_set', {
         meetingId: meetingId,
         title: newTitle,
       });
@@ -677,7 +677,7 @@ const Sidebar: React.FC = () => {
             {!isCollapsed && (
               <div className="p-3">
                 {/* <span className="text-lg text-center border rounded-full bg-blue-50 border-white font-semibold text-gray-700 mb-2 block items-center">
-                  <span>Meetily</span>
+                  <span>Meetfree</span>
                 </span> */}
                 <Logo isCollapsed={isCollapsed} />
 

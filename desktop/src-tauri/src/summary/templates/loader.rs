@@ -1,9 +1,9 @@
 use super::defaults;
 use super::types::Template;
-use std::path::PathBuf;
-use tracing::{debug, info, warn};
 use once_cell::sync::Lazy;
+use std::path::PathBuf;
 use std::sync::RwLock;
+use tracing::{debug, info, warn};
 
 // Global storage for the bundled templates directory path
 static BUNDLED_TEMPLATES_DIR: Lazy<RwLock<Option<PathBuf>>> = Lazy::new(|| RwLock::new(None));
@@ -19,14 +19,11 @@ pub fn set_bundled_templates_dir(path: PathBuf) {
 /// Get the user's custom templates directory path
 ///
 /// Returns the platform-specific application data directory for custom templates:
-/// - macOS: ~/Library/Application Support/Meetily/templates/
-/// - Windows: %APPDATA%\Meetily\templates\
-/// - Linux: ~/.config/Meetily/templates/
-fn get_custom_templates_dir() -> Option<PathBuf> {
-    let mut path = dirs::data_dir()?;
-    path.push("Meetily");
-    path.push("templates");
-    Some(path)
+/// - macOS: ~/Library/Application Support/meetfree/templates/
+/// - Windows: %APPDATA%\meetfree\templates\
+/// - Linux: ~/.config/meetfree/templates/
+fn get_custom_templates_dirs() -> Vec<PathBuf> {
+    crate::brand::custom_template_dirs_with_legacy()
 }
 
 /// Load a template from the bundled resources directory
@@ -44,7 +41,10 @@ fn load_bundled_template(template_id: &str) -> Option<String> {
 
     match std::fs::read_to_string(&template_path) {
         Ok(content) => {
-            info!("Loaded bundled template '{}' from {:?}", template_id, template_path);
+            info!(
+                "Loaded bundled template '{}' from {:?}",
+                template_id, template_path
+            );
             Some(content)
         }
         Err(e) => {
@@ -62,21 +62,25 @@ fn load_bundled_template(template_id: &str) -> Option<String> {
 /// # Returns
 /// The template JSON content if found, None otherwise
 fn load_custom_template(template_id: &str) -> Option<String> {
-    let custom_dir = get_custom_templates_dir()?;
-    let template_path = custom_dir.join(format!("{}.json", template_id));
+    for custom_dir in get_custom_templates_dirs() {
+        let template_path = custom_dir.join(format!("{}.json", template_id));
 
-    debug!("Checking for custom template at: {:?}", template_path);
+        debug!("Checking for custom template at: {:?}", template_path);
 
-    match std::fs::read_to_string(&template_path) {
-        Ok(content) => {
-            info!("Loaded custom template '{}' from {:?}", template_id, template_path);
-            Some(content)
-        }
-        Err(e) => {
-            debug!("No custom template '{}' found: {}", template_id, e);
-            None
+        match std::fs::read_to_string(&template_path) {
+            Ok(content) => {
+                info!(
+                    "Loaded custom template '{}' from {:?}",
+                    template_id, template_path
+                );
+                return Some(content);
+            }
+            Err(e) => {
+                debug!("No custom template '{}' found: {}", template_id, e);
+            }
         }
     }
+    None
 }
 
 /// Load and parse a template by identifier
@@ -171,7 +175,7 @@ pub fn list_template_ids() -> Vec<String> {
     }
 
     // Add custom templates if directory exists
-    if let Some(custom_dir) = get_custom_templates_dir() {
+    for custom_dir in get_custom_templates_dirs() {
         if custom_dir.exists() {
             match std::fs::read_dir(&custom_dir) {
                 Ok(entries) => {
@@ -187,7 +191,11 @@ pub fn list_template_ids() -> Vec<String> {
                     }
                 }
                 Err(e) => {
-                    warn!("Failed to read custom templates directory: {}", e);
+                    warn!(
+                        "Failed to read custom templates directory {}: {}",
+                        custom_dir.display(),
+                        e
+                    );
                 }
             }
         }

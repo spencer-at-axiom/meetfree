@@ -31,7 +31,8 @@ export interface StoredTranscript {
 
 class IndexedDBService {
   private db: IDBDatabase | null = null;
-  private readonly DB_NAME = 'MeetilyRecoveryDB';
+  private readonly DB_NAME = 'MeetfreeRecoveryDB';
+  private readonly LEGACY_DB_NAME = 'MeetilyRecoveryDB';
   private readonly DB_VERSION = 1;
   private initPromise: Promise<void> | null = null;
 
@@ -51,38 +52,42 @@ class IndexedDBService {
 
     this.initPromise = new Promise((resolve, reject) => {
       try {
-        const request = indexedDB.open(this.DB_NAME, this.DB_VERSION);
+        this.resolveDbName()
+          .then((dbName) => {
+            const request = indexedDB.open(dbName, this.DB_VERSION);
 
-        request.onerror = () => {
-          console.error('Failed to open IndexedDB:', request.error);
-          reject(request.error);
-        };
+            request.onerror = () => {
+              console.error('Failed to open IndexedDB:', request.error);
+              reject(request.error);
+            };
 
-        request.onsuccess = () => {
-          this.db = request.result;
-          resolve();
-        };
+            request.onsuccess = () => {
+              this.db = request.result;
+              resolve();
+            };
 
-        request.onupgradeneeded = (event) => {
-          const db = (event.target as IDBOpenDBRequest).result;
+            request.onupgradeneeded = (event) => {
+              const db = (event.target as IDBOpenDBRequest).result;
 
-          // Create meetings store
-          if (!db.objectStoreNames.contains('meetings')) {
-            const meetingsStore = db.createObjectStore('meetings', { keyPath: 'meetingId' });
-            meetingsStore.createIndex('lastUpdated', 'lastUpdated', { unique: false });
-            meetingsStore.createIndex('savedToSQLite', 'savedToSQLite', { unique: false });
-          }
+              // Create meetings store
+              if (!db.objectStoreNames.contains('meetings')) {
+                const meetingsStore = db.createObjectStore('meetings', { keyPath: 'meetingId' });
+                meetingsStore.createIndex('lastUpdated', 'lastUpdated', { unique: false });
+                meetingsStore.createIndex('savedToSQLite', 'savedToSQLite', { unique: false });
+              }
 
-          // Create transcripts store
-          if (!db.objectStoreNames.contains('transcripts')) {
-            const transcriptsStore = db.createObjectStore('transcripts', {
-              keyPath: 'id',
-              autoIncrement: true
-            });
-            transcriptsStore.createIndex('meetingId', 'meetingId', { unique: false });
-            transcriptsStore.createIndex('storedAt', 'storedAt', { unique: false });
-          }
-        };
+              // Create transcripts store
+              if (!db.objectStoreNames.contains('transcripts')) {
+                const transcriptsStore = db.createObjectStore('transcripts', {
+                  keyPath: 'id',
+                  autoIncrement: true
+                });
+                transcriptsStore.createIndex('meetingId', 'meetingId', { unique: false });
+                transcriptsStore.createIndex('storedAt', 'storedAt', { unique: false });
+              }
+            };
+          })
+          .catch(reject);
       } catch (error) {
         console.error('Exception during IndexedDB initialization:', error);
         reject(error);
@@ -90,6 +95,31 @@ class IndexedDBService {
     });
 
     return this.initPromise;
+  }
+
+  private async resolveDbName(): Promise<string> {
+    const listDatabases = (indexedDB as IDBFactory & { databases?: () => Promise<Array<{ name?: string }>> }).databases;
+    if (!listDatabases) {
+      return this.DB_NAME;
+    }
+
+    try {
+      const dbs = await listDatabases.call(indexedDB);
+      const names = new Set((dbs ?? []).map((db) => db.name).filter(Boolean));
+
+      if (names.has(this.DB_NAME)) {
+        return this.DB_NAME;
+      }
+
+      if (names.has(this.LEGACY_DB_NAME)) {
+        console.warn(`Using legacy recovery DB "${this.LEGACY_DB_NAME}"`);
+        return this.LEGACY_DB_NAME;
+      }
+    } catch (error) {
+      console.warn('Failed to enumerate IndexedDB databases, using default DB name', error);
+    }
+
+    return this.DB_NAME;
   }
 
   // Meeting operations

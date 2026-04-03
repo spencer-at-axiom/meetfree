@@ -27,7 +27,7 @@ export function useCopyOperations({
       console.log('📊 Fetching all transcripts for copying:', meetingId);
 
       // First, get total count by fetching first page
-      const firstPage = await invokeTauri('api_get_meeting_transcripts', {
+      const firstPage = await invokeTauri('meeting_transcripts_get', {
         meetingId,
         limit: 1,
         offset: 0,
@@ -41,7 +41,7 @@ export function useCopyOperations({
       }
 
       // Fetch all transcripts in one call
-      const allData = await invokeTauri('api_get_meeting_transcripts', {
+      const allData = await invokeTauri('meeting_transcripts_get', {
         meetingId,
         limit: totalCount,
         offset: 0,

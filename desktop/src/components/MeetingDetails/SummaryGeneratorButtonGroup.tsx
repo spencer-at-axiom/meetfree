@@ -219,7 +219,7 @@ export function SummaryGeneratorButtonGroup({
             duration: 7000,
             action: {
               label: 'Download',
-              onClick: () => invoke('open_external_url', { url: 'https://ollama.com/download' })
+              onClick: () => invoke('external_url_open', { url: 'https://ollama.com/download' })
             }
           }
         );

@@ -74,7 +74,7 @@ export function usePaginatedTranscripts({
         if (!meetingId) return null;
 
         try {
-            const data = await invoke<MeetingMetadata>('api_get_meeting_metadata', {
+            const data = await invoke<MeetingMetadata>('meeting_meta_get', {
                 meetingId,
             });
             setMetadata(data);
@@ -95,7 +95,7 @@ export function usePaginatedTranscripts({
 
         try {
             const response = await invoke<PaginatedTranscriptsResponse>(
-                'api_get_meeting_transcripts',
+                'meeting_transcripts_get',
                 {
                     meetingId,
                     limit: DEFAULT_PAGE_SIZE,

@@ -1,7 +1,7 @@
 [package]
-name = "meetily"
+name = "meetfree"
 version = "0.3.0"
-description = "A Tauri App for meeting minutes"
+description = "A Tauri app for meeting capture and summaries"
 authors = ["Sujith S"]
 license = "MIT"
 repository = "https://github.com/spencer-at-axiom/meetfree"

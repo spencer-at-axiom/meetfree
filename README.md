@@ -1,6 +1,6 @@
-# Meetily
+# Meetfree
 
-Meetily is a native Tauri desktop application for recording meetings, transcribing speech locally, storing meeting data in a local SQLite database, and generating summaries with either local or optional external models.
+Meetfree is a native Tauri desktop application for recording meetings, transcribing speech locally, storing meeting data in a local SQLite database, and generating summaries with either local or optional external models.
 
 ## Current Scope
 
@@ -36,7 +36,7 @@ See [docs/BUILDING.md](docs/BUILDING.md) for verified build commands and platfor
 
 The main desktop workflow lives under [`desktop/`](desktop/).
 
-The current native build path also requires building [`llama-helper/`](llama-helper/) before Tauri packaging or `cargo check -p meetily`.
+The current native build path also requires building [`llama-helper/`](llama-helper/) before Tauri packaging or `cargo check -p meetfree`.
 
 ## Documentation
 

@@ -160,11 +160,11 @@ fn extract_zip(
     archive_path: &std::path::Path,
     extract_dir: &std::path::Path,
 ) -> Result<(), String> {
-    let file = std::fs::File::open(archive_path)
-        .map_err(|e| format!("Failed to open ZIP: {}", e))?;
+    let file =
+        std::fs::File::open(archive_path).map_err(|e| format!("Failed to open ZIP: {}", e))?;
 
-    let mut archive = zip::ZipArchive::new(file)
-        .map_err(|e| format!("Failed to read ZIP archive: {}", e))?;
+    let mut archive =
+        zip::ZipArchive::new(file).map_err(|e| format!("Failed to read ZIP archive: {}", e))?;
 
     for i in 0..archive.len() {
         let mut file = archive
@@ -174,7 +174,10 @@ fn extract_zip(
         let outpath = match file.enclosed_name() {
             Some(name) => extract_dir.join(name),
             None => {
-                println!("cargo:warning=Skipping suspicious ZIP entry: {}", file.name());
+                println!(
+                    "cargo:warning=Skipping suspicious ZIP entry: {}",
+                    file.name()
+                );
                 continue;
             }
         };
@@ -211,8 +214,8 @@ fn extract_tar_xz(
     archive_path: &std::path::Path,
     extract_dir: &std::path::Path,
 ) -> Result<(), String> {
-    let file = std::fs::File::open(archive_path)
-        .map_err(|e| format!("Failed to open TAR.XZ: {}", e))?;
+    let file =
+        std::fs::File::open(archive_path).map_err(|e| format!("Failed to open TAR.XZ: {}", e))?;
 
     let decompressor = xz2::read::XzDecoder::new(file);
     let mut archive = tar::Archive::new(decompressor);
@@ -244,8 +247,8 @@ fn find_ffmpeg_in_extracted_dir(
         }
     }
 
-    for entry in std::fs::read_dir(extract_dir)
-        .map_err(|e| format!("Failed to read extract dir: {}", e))?
+    for entry in
+        std::fs::read_dir(extract_dir).map_err(|e| format!("Failed to read extract dir: {}", e))?
     {
         let entry = entry.map_err(|e| format!("Failed to read entry: {}", e))?;
         let path = entry.path();

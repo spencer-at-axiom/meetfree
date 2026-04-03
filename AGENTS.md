@@ -41,7 +41,7 @@ From the repository root:
 ```bash
 cargo build -p llama-helper
 cargo metadata --no-deps --format-version 1
-cargo check -p meetily
+cargo check -p meetfree
 ```
 
 ## Documentation Rule

@@ -13,6 +13,7 @@ use tokio::process::{Child, ChildStdin, ChildStdout};
 use tokio::sync::{Mutex, RwLock};
 
 use super::models;
+use crate::brand;
 
 // ============================================================================
 // Sidecar State Management
@@ -104,44 +105,20 @@ impl SidecarManager {
     /// Resolve the path to llama-helper binary
     fn resolve_helper_binary() -> Result<PathBuf> {
         // 1. Check environment variable (dev mode or manual override)
-        if let Ok(env_path) = std::env::var("MEETILY_LLAMA_HELPER") {
-            if !env_path.is_empty() {
-                let path = PathBuf::from(env_path);
-                if path.exists() {
-                    log::info!("Using llama-helper from MEETILY_LLAMA_HELPER: {}", path.display());
-                    return Ok(path);
-                }
-            }
+        if let Some(path) = sidecar_override_from_env() {
+            return Ok(path);
         }
 
         // In production, Tauri bundles the binary with target triple suffix
         // 2. Check relative to current executable (most reliable for AppImage/bundled apps)
         if let Ok(exe_path) = std::env::current_exe() {
             if let Some(exe_dir) = exe_path.parent() {
-                log::info!("Searching for llama-helper relative to executable: {}", exe_dir.display());
-                
-                // Get the target triple (same logic as before)
-                let target_triple = std::env::var("TARGET")
-                    .unwrap_or_else(|_| {
-                        #[cfg(all(target_os = "linux", target_arch = "x86_64"))]
-                        { "x86_64-unknown-linux-gnu".to_string() }
-                        #[cfg(all(target_os = "linux", target_arch = "aarch64"))]
-                        { "aarch64-unknown-linux-gnu".to_string() }
-                        #[cfg(all(target_os = "macos", target_arch = "x86_64"))]
-                        { "x86_64-apple-darwin".to_string() }
-                        #[cfg(all(target_os = "macos", target_arch = "aarch64"))]
-                        { "aarch64-apple-darwin".to_string() }
-                        #[cfg(all(target_os = "windows", target_arch = "x86_64"))]
-                        { "x86_64-pc-windows-msvc".to_string() }
-                        #[cfg(all(target_os = "windows", target_arch = "aarch64"))]
-                        { "aarch64-pc-windows-msvc".to_string() }
-                        #[cfg(not(any(
-                            all(target_os = "linux", any(target_arch = "x86_64", target_arch = "aarch64")),
-                            all(target_os = "macos", any(target_arch = "x86_64", target_arch = "aarch64")),
-                            all(target_os = "windows", any(target_arch = "x86_64", target_arch = "aarch64"))
-                        )))]
-                        { "unknown".to_string() }
-                    });
+                log::info!(
+                    "Searching for llama-helper relative to executable: {}",
+                    exe_dir.display()
+                );
+
+                let target_triple = target_triple();
 
                 let binary_name = if cfg!(windows) {
                     format!("llama-helper-{}.exe", target_triple)
@@ -149,56 +126,26 @@ impl SidecarManager {
                     format!("llama-helper-{}", target_triple)
                 };
 
-                // Try exact match in exe dir
-                let bundled = exe_dir.join(&binary_name);
-                if bundled.exists() {
-                    log::info!("Found exact match next to executable: {}", bundled.display());
-                    return Ok(bundled);
-                }
-
-                // Fuzzy match in exe dir
-                log::info!("Attempting fuzzy match in exe dir: {}", exe_dir.display());
-                if let Ok(entries) = std::fs::read_dir(exe_dir) {
-                    for entry in entries.flatten() {
-                        let path = entry.path();
-                        if let Some(name) = path.file_name().and_then(|n| n.to_str()) {
-                            if name.starts_with("llama-helper") && !name.ends_with(".d") {
-                                log::info!("Found fuzzy match next to executable: {}", path.display());
-                                return Ok(path);
-                            }
-                        }
-                    }
+                if let Some(path) =
+                    find_bundled_sidecar(exe_dir, &binary_name, allow_fuzzy_sidecar_lookup())
+                {
+                    log::info!(
+                        "Found bundled helper next to executable: {}",
+                        path.display()
+                    );
+                    return Ok(path);
                 }
             }
         }
 
         // 3. Check bundled resources (RESOURCE_DIR) - Fallback
         if let Ok(resource_dir) = std::env::var("RESOURCE_DIR") {
-            log::info!("Searching for llama-helper in RESOURCE_DIR: {}", resource_dir);
+            log::info!(
+                "Searching for llama-helper in RESOURCE_DIR: {}",
+                resource_dir
+            );
             let resource_path = PathBuf::from(&resource_dir);
-             // Get the target triple again (or we could have shared it, but code duplication is safer for this tool usage)
-            let target_triple = std::env::var("TARGET")
-                .unwrap_or_else(|_| {
-                     #[cfg(all(target_os = "linux", target_arch = "x86_64"))]
-                    { "x86_64-unknown-linux-gnu".to_string() }
-                    // ... (abbreviated for brevity in thought, but must be full in tool)
-                     #[cfg(all(target_os = "linux", target_arch = "aarch64"))]
-                    { "aarch64-unknown-linux-gnu".to_string() }
-                    #[cfg(all(target_os = "macos", target_arch = "x86_64"))]
-                    { "x86_64-apple-darwin".to_string() }
-                    #[cfg(all(target_os = "macos", target_arch = "aarch64"))]
-                    { "aarch64-apple-darwin".to_string() }
-                    #[cfg(all(target_os = "windows", target_arch = "x86_64"))]
-                    { "x86_64-pc-windows-msvc".to_string() }
-                    #[cfg(all(target_os = "windows", target_arch = "aarch64"))]
-                    { "aarch64-pc-windows-msvc".to_string() }
-                    #[cfg(not(any(
-                        all(target_os = "linux", any(target_arch = "x86_64", target_arch = "aarch64")),
-                        all(target_os = "macos", any(target_arch = "x86_64", target_arch = "aarch64")),
-                        all(target_os = "windows", any(target_arch = "x86_64", target_arch = "aarch64"))
-                    )))]
-                    { "unknown".to_string() }
-                });
+            let target_triple = target_triple();
 
             let binary_name = if cfg!(windows) {
                 format!("llama-helper-{}.exe", target_triple)
@@ -206,23 +153,11 @@ impl SidecarManager {
                 format!("llama-helper-{}", target_triple)
             };
 
-            let bundled = resource_path.join(&binary_name);
-            if bundled.exists() {
-                log::info!("Found exact match in RESOURCE_DIR: {}", bundled.display());
-                return Ok(bundled);
-            }
-
-            // Fuzzy match in RESOURCE_DIR
-            if let Ok(entries) = std::fs::read_dir(&resource_path) {
-                for entry in entries.flatten() {
-                    let path = entry.path();
-                    if let Some(name) = path.file_name().and_then(|n| n.to_str()) {
-                        if name.starts_with("llama-helper") && !name.ends_with(".d") {
-                            log::info!("Found fuzzy match in RESOURCE_DIR: {}", path.display());
-                            return Ok(path);
-                        }
-                    }
-                }
+            if let Some(path) =
+                find_bundled_sidecar(&resource_path, &binary_name, allow_fuzzy_sidecar_lookup())
+            {
+                log::info!("Found bundled helper in RESOURCE_DIR: {}", path.display());
+                return Ok(path);
             }
         } else {
             log::warn!("RESOURCE_DIR environment variable not set");
@@ -252,7 +187,9 @@ impl SidecarManager {
         }
 
         Err(anyhow!(
-            "llama-helper binary not found. Build with 'cd llama-helper && cargo build --release' or set MEETILY_LLAMA_HELPER env var."
+            "llama-helper binary not found. Build with 'cd llama-helper && cargo build --release' or set {} (fallback: {}).",
+            brand::LLAMA_HELPER_ENV,
+            brand::LEGACY_LLAMA_HELPER_ENV
         ))
     }
 
@@ -282,7 +219,7 @@ impl SidecarManager {
 
         #[cfg(unix)]
         let mut command = tokio::process::Command::new("nice");
-        
+
         #[cfg(not(unix))]
         let mut command = tokio::process::Command::new(&self.helper_binary_path);
 
@@ -292,8 +229,7 @@ impl SidecarManager {
         command
             .stdin(Stdio::piped())
             .stdout(Stdio::piped())
-            .stderr(Stdio::inherit()) // Log stderr to main process
-            .env("LLAMA_IDLE_TIMEOUT", self.idle_timeout_secs.to_string());
+            .stderr(Stdio::inherit()); // Log stderr to main process
 
         #[cfg(target_os = "windows")]
         {
@@ -303,12 +239,21 @@ impl SidecarManager {
             command.creation_flags(CREATE_NO_WINDOW | BELOW_NORMAL_PRIORITY_CLASS);
         }
 
-        let mut child = command
-            .spawn()
-            .with_context(|| format!("Failed to spawn llama-helper at {:?}", self.helper_binary_path))?;
+        let mut child = command.spawn().with_context(|| {
+            format!(
+                "Failed to spawn llama-helper at {:?}",
+                self.helper_binary_path
+            )
+        })?;
 
-        let stdin = child.stdin.take().ok_or_else(|| anyhow!("Failed to get stdin"))?;
-        let stdout = child.stdout.take().ok_or_else(|| anyhow!("Failed to get stdout"))?;
+        let stdin = child
+            .stdin
+            .take()
+            .ok_or_else(|| anyhow!("Failed to get stdin"))?;
+        let stdout = child
+            .stdout
+            .take()
+            .ok_or_else(|| anyhow!("Failed to get stdout"))?;
 
         // Store handles
         {
@@ -413,7 +358,7 @@ impl SidecarManager {
 
         // Note: We don't use send_request here to avoid incrementing active_request_count
         // for internal health checks, as that would prevent graceful shutdown
-        
+
         // Write request
         {
             let mut stdin_lock = self.stdin_writer.lock().await;
@@ -441,31 +386,34 @@ impl SidecarManager {
     /// Waits for active requests to complete before killing the process
     pub async fn shutdown_gracefully(&self) -> Result<()> {
         log::info!("Initiating graceful shutdown of sidecar");
-        
+
         // Set shutdown flag to prevent new internal tasks
         self.should_shutdown.store(true, Ordering::SeqCst);
-        
+
         // Wait for active requests to complete
         // We poll every 500ms
         let start = Instant::now();
         let max_wait = Duration::from_secs(600); // Wait up to 10 minutes for long generations
-        
+
         loop {
             let count = self.active_request_count.load(Ordering::SeqCst);
             if count == 0 {
                 log::info!("No active requests, proceeding with shutdown");
                 break;
             }
-            
+
             if start.elapsed() > max_wait {
-                log::warn!("Timed out waiting for active requests ({} active), forcing shutdown", count);
+                log::warn!(
+                    "Timed out waiting for active requests ({} active), forcing shutdown",
+                    count
+                );
                 break;
             }
-            
+
             log::debug!("Waiting for {} active requests to complete...", count);
             tokio::time::sleep(Duration::from_millis(500)).await;
         }
-        
+
         self.shutdown().await
     }
 
@@ -489,7 +437,8 @@ impl SidecarManager {
                     stdin.flush().await?;
                 }
                 Ok::<(), anyhow::Error>(())
-            }.await;
+            }
+            .await;
         }
 
         // Kill process if still running
@@ -663,5 +612,293 @@ impl Drop for SidecarManager {
         // Note: Actual cleanup happens in shutdown() method
         // We can't do async work in Drop, so this is best-effort
         log::debug!("SidecarManager dropped");
+    }
+}
+
+fn allow_fuzzy_sidecar_lookup() -> bool {
+    cfg!(debug_assertions)
+        && [
+            brand::LLAMA_HELPER_ALLOW_FUZZY_ENV,
+            brand::LEGACY_LLAMA_HELPER_ALLOW_FUZZY_ENV,
+        ]
+        .into_iter()
+        .find_map(|key| std::env::var(key).ok())
+        .is_some_and(|value| matches!(value.as_str(), "1" | "true" | "TRUE" | "True"))
+}
+
+fn find_bundled_sidecar(
+    dir: &std::path::Path,
+    binary_name: &str,
+    allow_fuzzy: bool,
+) -> Option<PathBuf> {
+    let exact = dir.join(binary_name);
+    if exact.exists() {
+        return Some(exact);
+    }
+
+    if !allow_fuzzy {
+        return None;
+    }
+
+    log::warn!(
+        "Using fuzzy llama-helper lookup in {}. This is intended for explicit development overrides only.",
+        dir.display()
+    );
+
+    std::fs::read_dir(dir)
+        .ok()?
+        .flatten()
+        .map(|entry| entry.path())
+        .find(|path| {
+            path.file_name()
+                .and_then(|name| name.to_str())
+                .is_some_and(|name| name.starts_with("llama-helper") && !name.ends_with(".d"))
+        })
+}
+
+fn sidecar_override_from_env() -> Option<PathBuf> {
+    if let Ok(env_path) = std::env::var(brand::LLAMA_HELPER_ENV) {
+        if !env_path.is_empty() {
+            let path = PathBuf::from(env_path);
+            if path.exists() {
+                log::info!(
+                    "Using llama-helper from {}: {}",
+                    brand::LLAMA_HELPER_ENV,
+                    path.display()
+                );
+                return Some(path);
+            }
+        }
+    }
+
+    if let Ok(env_path) = std::env::var(brand::LEGACY_LLAMA_HELPER_ENV) {
+        if !env_path.is_empty() {
+            let path = PathBuf::from(env_path);
+            if path.exists() {
+                log::warn!(
+                    "{} is deprecated; use {}. Using legacy helper path: {}",
+                    brand::LEGACY_LLAMA_HELPER_ENV,
+                    brand::LLAMA_HELPER_ENV,
+                    path.display()
+                );
+                return Some(path);
+            }
+        }
+    }
+
+    None
+}
+
+fn target_triple() -> String {
+    std::env::var("TARGET").unwrap_or_else(|_| {
+        #[cfg(all(target_os = "linux", target_arch = "x86_64"))]
+        {
+            return "x86_64-unknown-linux-gnu".to_string();
+        }
+        #[cfg(all(target_os = "linux", target_arch = "aarch64"))]
+        {
+            return "aarch64-unknown-linux-gnu".to_string();
+        }
+        #[cfg(all(target_os = "macos", target_arch = "x86_64"))]
+        {
+            return "x86_64-apple-darwin".to_string();
+        }
+        #[cfg(all(target_os = "macos", target_arch = "aarch64"))]
+        {
+            return "aarch64-apple-darwin".to_string();
+        }
+        #[cfg(all(target_os = "windows", target_arch = "x86_64"))]
+        {
+            return "x86_64-pc-windows-msvc".to_string();
+        }
+        #[cfg(all(target_os = "windows", target_arch = "aarch64"))]
+        {
+            return "aarch64-pc-windows-msvc".to_string();
+        }
+        #[cfg(not(any(
+            all(
+                target_os = "linux",
+                any(target_arch = "x86_64", target_arch = "aarch64")
+            ),
+            all(
+                target_os = "macos",
+                any(target_arch = "x86_64", target_arch = "aarch64")
+            ),
+            all(
+                target_os = "windows",
+                any(target_arch = "x86_64", target_arch = "aarch64")
+            )
+        )))]
+        {
+            "unknown".to_string()
+        }
+    })
+}
+
+#[cfg(test)]
+mod tests {
+    use std::path::PathBuf;
+    use std::sync::Arc;
+    use std::time::{Duration, Instant};
+
+    use serde_json::json;
+    use tempfile::tempdir;
+    use tokio::time::sleep;
+
+    use super::*;
+
+    #[test]
+    fn test_find_bundled_sidecar_requires_exact_match_without_fuzzy() {
+        let dir = tempdir().unwrap();
+        let fuzzy = dir.path().join("llama-helper-dev.exe");
+        std::fs::write(&fuzzy, b"binary").unwrap();
+
+        assert!(find_bundled_sidecar(dir.path(), "llama-helper-x86_64.exe", false).is_none());
+        assert_eq!(
+            find_bundled_sidecar(dir.path(), "llama-helper-x86_64.exe", true),
+            Some(fuzzy)
+        );
+    }
+
+    #[tokio::test]
+    async fn test_ensure_running_spawns_sidecar() {
+        let _guard = crate::summary::summary_engine::test_utils::test_env_lock();
+        crate::summary::summary_engine::test_utils::clear_test_env();
+        crate::summary::summary_engine::test_utils::set_fake_helper_env();
+
+        let app_data_dir = tempdir().unwrap();
+        let manager = SidecarManager::new(app_data_dir.path().to_path_buf()).unwrap();
+        manager
+            .ensure_running(PathBuf::from("C:/test/model.gguf"))
+            .await
+            .unwrap();
+
+        assert!(manager.is_healthy());
+
+        manager.shutdown().await.unwrap();
+        crate::summary::summary_engine::test_utils::clear_test_env();
+    }
+
+    #[tokio::test]
+    async fn test_sidecar_request_response_round_trip() {
+        let _guard = crate::summary::summary_engine::test_utils::test_env_lock();
+        crate::summary::summary_engine::test_utils::clear_test_env();
+        crate::summary::summary_engine::test_utils::set_fake_helper_env();
+
+        let app_data_dir = tempdir().unwrap();
+        let manager = SidecarManager::new(app_data_dir.path().to_path_buf()).unwrap();
+        manager
+            .ensure_running(PathBuf::from("C:/test/model.gguf"))
+            .await
+            .unwrap();
+
+        let request = json!({
+            "type": "generate",
+            "prompt": "TEST_OK",
+            "model_path": "C:/test/model.gguf",
+            "model_layer_count": 26
+        });
+        let response = manager
+            .send_request(request.to_string(), Duration::from_secs(2))
+            .await
+            .unwrap();
+
+        assert!(response.contains("\"type\":\"response\""));
+        assert!(response.contains("ok-response"));
+
+        manager.shutdown().await.unwrap();
+        crate::summary::summary_engine::test_utils::clear_test_env();
+    }
+
+    #[tokio::test]
+    async fn test_sidecar_timeout_forces_shutdown() {
+        let _guard = crate::summary::summary_engine::test_utils::test_env_lock();
+        crate::summary::summary_engine::test_utils::clear_test_env();
+        crate::summary::summary_engine::test_utils::set_fake_helper_env();
+
+        let app_data_dir = tempdir().unwrap();
+        let manager = SidecarManager::new(app_data_dir.path().to_path_buf()).unwrap();
+        manager
+            .ensure_running(PathBuf::from("C:/test/model.gguf"))
+            .await
+            .unwrap();
+
+        let request = json!({
+            "type": "generate",
+            "prompt": "TEST_TIMEOUT",
+            "model_path": "C:/test/model.gguf",
+            "model_layer_count": 26
+        });
+        let error = manager
+            .send_request(request.to_string(), Duration::from_millis(100))
+            .await
+            .expect_err("request should time out");
+
+        assert!(error.to_string().contains("timed out"));
+        assert!(!manager.is_healthy());
+
+        crate::summary::summary_engine::test_utils::clear_test_env();
+    }
+
+    #[tokio::test]
+    async fn test_shutdown_gracefully_waits_for_active_request() {
+        let _guard = crate::summary::summary_engine::test_utils::test_env_lock();
+        crate::summary::summary_engine::test_utils::clear_test_env();
+        crate::summary::summary_engine::test_utils::set_fake_helper_env();
+
+        let app_data_dir = tempdir().unwrap();
+        let manager = Arc::new(SidecarManager::new(app_data_dir.path().to_path_buf()).unwrap());
+        manager
+            .ensure_running(PathBuf::from("C:/test/model.gguf"))
+            .await
+            .unwrap();
+
+        let request = json!({
+            "type": "generate",
+            "prompt": "TEST_SLOW",
+            "model_path": "C:/test/model.gguf",
+            "model_layer_count": 26
+        })
+        .to_string();
+
+        let request_manager = manager.clone();
+        let handle = tokio::spawn(async move {
+            request_manager
+                .send_request(request, Duration::from_secs(2))
+                .await
+                .unwrap()
+        });
+
+        sleep(Duration::from_millis(50)).await;
+
+        let start = Instant::now();
+        manager.shutdown_gracefully().await.unwrap();
+        let elapsed = start.elapsed();
+        let response = handle.await.unwrap();
+
+        assert!(elapsed >= Duration::from_millis(150));
+        assert!(response.contains("slow-response"));
+        assert!(!manager.is_healthy());
+
+        crate::summary::summary_engine::test_utils::clear_test_env();
+    }
+
+    #[tokio::test]
+    async fn test_force_shutdown_marks_sidecar_unhealthy() {
+        let _guard = crate::summary::summary_engine::test_utils::test_env_lock();
+        crate::summary::summary_engine::test_utils::clear_test_env();
+        crate::summary::summary_engine::test_utils::set_fake_helper_env();
+
+        let app_data_dir = tempdir().unwrap();
+        let manager = SidecarManager::new(app_data_dir.path().to_path_buf()).unwrap();
+        manager
+            .ensure_running(PathBuf::from("C:/test/model.gguf"))
+            .await
+            .unwrap();
+
+        manager.shutdown().await.unwrap();
+        assert!(!manager.is_healthy());
+
+        crate::summary::summary_engine::test_utils::clear_test_env();
     }
 }
