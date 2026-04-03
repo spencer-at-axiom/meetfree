@@ -1,6 +1,8 @@
-# Meetfree
+![MeetFree Banner](docs/meetfree_banner.png)
 
-Meetfree is a native Tauri desktop application for recording meetings, transcribing speech locally, storing meeting data in a local SQLite database, and generating summaries with either local or optional external models.
+# MeetFree
+
+MeetFree is a native Tauri desktop application for recording meetings, transcribing speech locally, storing meeting data in a local SQLite database, and generating summaries with either local or optional external models.
 
 ## Current Scope
 
