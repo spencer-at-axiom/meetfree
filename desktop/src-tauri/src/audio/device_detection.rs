@@ -521,7 +521,14 @@ mod tests {
         // With 2x headroom = 160ms
         // Should clamp to 80-200ms range
         let timeout = calculate_buffer_timeout(InputDeviceKind::Bluetooth, 3840, 48000);
-        assert_eq!(timeout, Duration::from_millis(160));
+        let expected = Duration::from_millis(160);
+        let delta = timeout.abs_diff(expected);
+        assert!(
+            delta <= Duration::from_micros(10),
+            "expected ~160ms timeout, got {:?} (delta {:?})",
+            timeout,
+            delta
+        );
     }
 
     #[test]

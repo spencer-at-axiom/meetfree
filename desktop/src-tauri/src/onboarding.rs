@@ -1,7 +1,7 @@
 use anyhow::Result;
 use log::{error, info, warn};
 use serde::{Deserialize, Serialize};
-use tauri::{AppHandle, Runtime};
+use tauri::{AppHandle, Manager, Runtime};
 use tauri_plugin_store::StoreExt;
 
 use crate::database::repositories::setting::SettingsRepository;
@@ -209,10 +209,30 @@ pub async fn complete_onboarding<R: Runtime>(
         .await
         .map_err(|e| format!("Failed to load onboarding status: {}", e))?;
 
+    let parakeet_ready = crate::parakeet_engine::commands::parakeet_has_available_models()
+        .await
+        .unwrap_or(false);
+    let summary_ready = crate::summary::summary_engine::commands::builtin_ai_get_available_summary_model(
+        app.clone(),
+        app.state::<crate::summary::summary_engine::ModelManagerState>(),
+    )
+    .await
+    .ok()
+    .flatten()
+    .is_some();
+
     status.completed = true;
     status.current_step = 4; // Max step (4 on macOS with permissions, 3 on other platforms)
-    status.model_status.parakeet = "downloaded".to_string();
-    status.model_status.summary = "downloaded".to_string();
+    status.model_status.parakeet = if parakeet_ready {
+        "downloaded".to_string()
+    } else {
+        "not_downloaded".to_string()
+    };
+    status.model_status.summary = if summary_ready {
+        "downloaded".to_string()
+    } else {
+        "downloading".to_string()
+    };
 
     save_onboarding_status(&app, &status)
         .await

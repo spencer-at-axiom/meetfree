@@ -324,7 +324,7 @@ export function DownloadProgressStep() {
     // Show toast if downloads still in progress
     if (!downloadsComplete) {
       toast.info('Downloads will continue in the background', {
-        description: 'You can start using the app. Recording will be available once speech recognition is ready.',
+        description: 'Recording is ready now. Local summaries will unlock after the Summary Engine finishes downloading.',
         duration: 5000,
       });
     }
@@ -475,7 +475,7 @@ export function DownloadProgressStep() {
                 <div>
                   <p className="font-medium">You can continue while this finishes</p>
                   <p className="text-gray-700 mt-1">
-                    Download will continue in the background.
+                    Recording is ready. Local summaries will become available when this download completes.
                   </p>
                 </div>
               </div>

@@ -529,6 +529,20 @@ impl RecordingSaver {
     pub fn get_meeting_name(&self) -> Option<String> {
         self.meeting_name.clone()
     }
+
+    /// Persist the database meeting id into metadata.json once SQLite save succeeds.
+    pub fn set_persisted_meeting_id(&mut self, meeting_id: String) -> Result<()> {
+        if let Some(ref mut metadata) = self.metadata {
+            metadata.meeting_id = Some(meeting_id);
+
+            if let Some(folder) = &self.meeting_folder {
+                let metadata_clone = metadata.clone();
+                self.write_metadata(folder, &metadata_clone)?;
+            }
+        }
+
+        Ok(())
+    }
 }
 
 impl Default for RecordingSaver {

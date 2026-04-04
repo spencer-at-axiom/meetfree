@@ -490,6 +490,11 @@ impl RecordingManager {
         self.recording_saver.get_meeting_name()
     }
 
+    /// Persist the SQLite meeting id into the meeting metadata after save succeeds.
+    pub fn set_persisted_meeting_id(&mut self, meeting_id: String) -> Result<()> {
+        self.recording_saver.set_persisted_meeting_id(meeting_id)
+    }
+
     /// Cleanup all resources without saving
     pub async fn cleanup_without_save(&mut self) {
         if self.is_recording() {

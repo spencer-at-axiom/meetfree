@@ -13,6 +13,9 @@ use std::sync::{
 use tauri::{AppHandle, Emitter, Manager, Runtime};
 use tokio::task::JoinHandle;
 
+use crate::api::api::TranscriptSegment as PersistedTranscriptSegment;
+use crate::database::repositories::transcript::TranscriptsRepository;
+
 use super::{
     default_input_device,  // Get default microphone
     default_output_device, // Get default system audio
@@ -56,6 +59,60 @@ pub struct TranscriptionStatus {
     pub chunks_in_queue: usize,
     pub is_processing: bool,
     pub last_activity_ms: u64,
+}
+
+#[derive(Debug, Serialize, Clone)]
+struct RecordingStoppedPayload {
+    message: String,
+    folder_path: Option<String>,
+    meeting_name: Option<String>,
+    meeting_id: Option<String>,
+    transcript_count: usize,
+    transcription_timed_out: bool,
+    save_error: Option<String>,
+}
+
+fn fallback_meeting_name() -> String {
+    let now = chrono::Local::now();
+    format!("Meeting {}", now.format("%Y-%m-%d_%H-%M-%S"))
+}
+
+async fn persist_recording_to_database<R: Runtime>(
+    app: &AppHandle<R>,
+    meeting_name: Option<String>,
+    meeting_folder: Option<std::path::PathBuf>,
+    transcript_segments: Vec<crate::audio::recording_saver::TranscriptSegment>,
+) -> Result<String, String> {
+    let meeting_title = meeting_name.unwrap_or_else(fallback_meeting_name);
+    let folder_path = meeting_folder.map(|path| path.to_string_lossy().to_string());
+    let transcripts_to_save: Vec<PersistedTranscriptSegment> = transcript_segments
+        .into_iter()
+        .map(|segment| PersistedTranscriptSegment {
+            id: segment.id,
+            text: segment.text,
+            timestamp: segment.display_time,
+            audio_start_time: Some(segment.audio_start_time),
+            audio_end_time: Some(segment.audio_end_time),
+            duration: Some(segment.duration),
+        })
+        .collect();
+
+    info!(
+        "Saving recording to SQLite from Rust: title='{}', transcripts={}, folder_path={:?}",
+        meeting_title,
+        transcripts_to_save.len(),
+        folder_path
+    );
+
+    let state = app.state::<crate::state::AppState>();
+    TranscriptsRepository::save_transcript(
+        state.db_manager.pool(),
+        &meeting_title,
+        &transcripts_to_save,
+        folder_path,
+    )
+    .await
+    .map_err(|e| format!("Failed to save meeting transcript: {}", e))
 }
 
 // ============================================================================
@@ -576,6 +633,7 @@ pub async fn stop_recording<R: Runtime>(
         let mut global_task = TRANSCRIPTION_TASK.lock().unwrap();
         global_task.take()
     };
+    let mut transcription_timed_out = false;
 
     if let Some(task_handle) = transcription_task {
         info!("⏳ Waiting for ALL transcription chunks to be processed (no timeout - preserving every chunk)");
@@ -619,6 +677,7 @@ pub async fn stop_recording<R: Runtime>(
             }
             Err(_) => {
                 warn!("⏱️ Transcription timeout (10 minutes) reached, continuing shutdown to prevent indefinite hang");
+                transcription_timed_out = true;
                 // Continue shutdown even on timeout - better to lose some chunks than hang forever
             }
         }
@@ -728,59 +787,94 @@ pub async fn stop_recording<R: Runtime>(
     );
 
     // Perform final cleanup with the manager if available
-    let (meeting_folder, meeting_name) = if let Some(mut manager) = manager_for_cleanup {
-        info!("🧹 Performing final cleanup and saving recording data");
+    let (meeting_folder, meeting_name, meeting_id, transcript_count, save_error) =
+        if let Some(mut manager) = manager_for_cleanup {
+            info!("🧹 Performing final cleanup and saving recording data");
 
-        // Extract meeting info BEFORE async operations
-        let meeting_folder = manager.get_meeting_folder();
-        let meeting_name = manager.get_meeting_name();
+            // Extract meeting info BEFORE async operations
+            let meeting_folder = manager.get_meeting_folder();
+            let meeting_name = manager.get_meeting_name();
+            let transcript_segments = manager.get_transcript_segments();
+            let transcript_count = transcript_segments.len();
 
-        match tokio::time::timeout(
-            tokio::time::Duration::from_secs(300), // 5 minutes max for file I/O
-            manager.save_recording_only(&app),
-        )
-        .await
-        {
-            Ok(Ok(_)) => {
-                info!("✅ Recording data saved successfully during cleanup");
-            }
-            Ok(Err(e)) => {
-                warn!(
-                    "⚠️ Error during recording cleanup (transcripts preserved): {}",
-                    e
-                );
-                // Don't fail shutdown - transcripts are already preserved
-            }
-            Err(_) => {
-                warn!("⏱️ File I/O timeout (5 minutes) reached during save, continuing shutdown");
-                // Don't fail shutdown - transcripts are already preserved
-            }
-        }
+            let save_result = persist_recording_to_database(
+                &app,
+                meeting_name.clone(),
+                meeting_folder.clone(),
+                transcript_segments,
+            )
+            .await;
 
-        (meeting_folder, meeting_name)
-    } else {
-        info!("ℹ️ No recording manager available for cleanup");
-        (None, None)
-    };
+            let (meeting_id, save_error) = match save_result {
+                Ok(meeting_id) => {
+                    info!("✅ Recording persisted to SQLite with meeting_id={}", meeting_id);
+                    if let Err(e) = manager.set_persisted_meeting_id(meeting_id.clone()) {
+                        warn!("Failed to persist meeting_id into metadata: {}", e);
+                    }
+                    (Some(meeting_id), None)
+                }
+                Err(e) => {
+                    error!("❌ Failed to persist recording to SQLite: {}", e);
+                    (None, Some(e))
+                }
+            };
+
+            match tokio::time::timeout(
+                tokio::time::Duration::from_secs(300), // 5 minutes max for file I/O
+                manager.save_recording_only(&app),
+            )
+            .await
+            {
+                Ok(Ok(_)) => {
+                    info!("✅ Recording data saved successfully during cleanup");
+                }
+                Ok(Err(e)) => {
+                    warn!(
+                        "⚠️ Error during recording cleanup (transcripts preserved): {}",
+                        e
+                    );
+                    // Don't fail shutdown - transcripts are already preserved
+                }
+                Err(_) => {
+                    warn!("⏱️ File I/O timeout (5 minutes) reached during save, continuing shutdown");
+                    // Don't fail shutdown - transcripts are already preserved
+                }
+            }
+
+            (
+                meeting_folder,
+                meeting_name,
+                meeting_id,
+                transcript_count,
+                save_error,
+            )
+        } else {
+            info!("ℹ️ No recording manager available for cleanup");
+            (
+                None,
+                None,
+                None,
+                0,
+                Some("Recording manager unavailable during shutdown".to_string()),
+            )
+        };
 
     // Set recording flag to false
     info!("🔍 Setting IS_RECORDING to false");
     IS_RECORDING.store(false, Ordering::SeqCst);
 
-    // Step 4.5: Prepare metadata for frontend (NO database save)
-    // NOTE: We do NOT save to database here. The frontend will save after all transcripts are displayed.
-    // This ensures the user sees all transcripts streaming in before the database save happens.
+    // Step 4.5: Prepare metadata for frontend cleanup and navigation.
     let (folder_path_str, meeting_name_str) = match (&meeting_folder, &meeting_name) {
         (Some(path), Some(name)) => (Some(path.to_string_lossy().to_string()), Some(name.clone())),
         _ => (None, None),
     };
 
-    info!("📤 Preparing recording metadata for frontend save");
+    info!("📤 Preparing recording metadata for frontend completion");
     info!("   folder_path: {:?}", folder_path_str);
     info!("   meeting_name: {:?}", meeting_name_str);
-
-    // Database save removed - frontend will handle this after receiving all transcripts
-    info!("ℹ️ Skipping database save in Rust - frontend will save after all transcripts received");
+    info!("   meeting_id: {:?}", meeting_id);
+    info!("   transcript_count: {}", transcript_count);
+    info!("   save_error: {:?}", save_error);
 
     // Step 5: Complete shutdown
     let _ = app.emit(
@@ -792,16 +886,22 @@ pub async fn stop_recording<R: Runtime>(
         }),
     );
 
-    // Emit final stop event with folder_path and meeting_name for frontend to save
-    app.emit(
-        "recording-stopped",
-        serde_json::json!({
-            "message": "Recording stopped - frontend will save after all transcripts received",
-            "folder_path": folder_path_str,
-            "meeting_name": meeting_name_str
-        }),
-    )
-    .map_err(|e| e.to_string())?;
+    let stop_payload = RecordingStoppedPayload {
+        message: if save_error.is_some() {
+            "Recording stopped, but saving the meeting failed".to_string()
+        } else {
+            "Recording stopped and meeting saved successfully".to_string()
+        },
+        folder_path: folder_path_str,
+        meeting_name: meeting_name_str,
+        meeting_id,
+        transcript_count,
+        transcription_timed_out,
+        save_error,
+    };
+
+    app.emit("recording-stopped", &stop_payload)
+        .map_err(|e| e.to_string())?;
 
     // Update tray menu to reflect stopped state
     crate::tray::update_tray_menu(&app);

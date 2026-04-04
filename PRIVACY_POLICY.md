@@ -9,6 +9,7 @@ This policy describes the behavior of the code in this repository.
 - Meeting recordings, transcripts, summaries, and settings are stored by the desktop app on the local machine.
 - The desktop app initializes its SQLite database in the Tauri app data directory.
 - Local transcription is handled by the native app through Whisper or Parakeet.
+- Provider configuration, including API keys when used, is currently stored locally by the app.
 
 ## Optional External Providers
 
@@ -33,25 +34,9 @@ The current codebase also supports local summary generation through:
 
 ## Analytics
 
-- Analytics are optional.
-- Analytics default to off.
-- When enabled, analytics use PostHog and a generated pseudonymous user identifier.
-
-The analytics UI and event layer describe collection in terms of:
-
-- App usage events
-- Session and feature usage data
-- Platform and architecture metadata
-- Model/provider selection metadata
-- Anonymous device-type and meeting-performance metrics
-
-The current analytics UI explicitly says it does not collect:
-
-- Meeting names or titles
-- Meeting transcripts or content
-- Audio recordings
-- Device names
-- Personal information
+- Analytics code is currently disabled in this fork.
+- The current app ships a no-op analytics shim and does not send analytics events to a remote service.
+- If analytics collection is reintroduced later, the privacy policy and consent UX should be updated before release.
 
 ## No Blanket Local-Only Claim
 

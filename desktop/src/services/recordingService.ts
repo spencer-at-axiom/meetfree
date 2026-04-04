@@ -20,6 +20,10 @@ export interface RecordingStoppedPayload {
   message: string;
   folder_path?: string;
   meeting_name?: string;
+  meeting_id?: string;
+  transcript_count?: number;
+  transcription_timed_out?: boolean;
+  save_error?: string;
 }
 
 /**

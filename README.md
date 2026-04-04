@@ -15,7 +15,7 @@ The current codebase includes:
 - Summary generation with Ollama, BuiltInAI, OpenAI, Claude, Groq, OpenRouter, and custom OpenAI-compatible endpoints.
 - Summary template discovery from built-in, bundled, and user template directories.
 - Meeting import and retranscription workflows.
-- Optional product analytics, disabled by default.
+- Analytics code is currently disabled in this fork.
 
 ## Privacy Model
 
@@ -43,8 +43,9 @@ The current native build path also requires building [`llama-helper/`](llama-hel
 ## Documentation
 
 - [docs/architecture.md](docs/architecture.md)
+- [docs/technical-design.md](docs/technical-design.md)
+- [docs/roadmap-v0.1.0.md](docs/roadmap-v0.1.0.md)
 - [docs/BUILDING.md](docs/BUILDING.md)
-- [docs/GPU_ACCELERATION.md](docs/GPU_ACCELERATION.md)
 - [PRIVACY_POLICY.md](PRIVACY_POLICY.md)
 - [CONTRIBUTING.md](CONTRIBUTING.md)
 
