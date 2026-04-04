@@ -15,7 +15,7 @@ interface UseCopyOperationsProps {
 
 export function useCopyOperations({
   meeting,
-  transcripts,
+  transcripts: _transcripts,
   meetingTitle,
   aiSummary,
   blockNoteSummaryRef,

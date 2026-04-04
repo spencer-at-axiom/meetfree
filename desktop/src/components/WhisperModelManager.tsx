@@ -33,7 +33,6 @@ export function ModelManager({
   const [error, setError] = useState<string | null>(null);
   const [initialized, setInitialized] = useState(false);
   const [downloadingModels, setDownloadingModels] = useState<Set<string>>(new Set());
-  const [hasUserSelection, setHasUserSelection] = useState(false);
 
   // Refs for stable callbacks
   const onModelSelectRef = useRef(onModelSelect);
@@ -329,8 +328,6 @@ export function ModelManager({
   };
 
   const selectModel = async (modelName: string) => {
-    setHasUserSelection(true);
-
     if (onModelSelect) {
       onModelSelect(modelName);
     }
@@ -435,7 +432,6 @@ export function ModelManager({
               onDownload={() => downloadModel(model.name)}
               onCancel={() => cancelDownload(model.name)}
               onDelete={() => deleteModel(model.name)}
-              isDownloading={downloadingModels.has(model.name)}
               displayName={getDisplayName(model.name)}
             />
           );
@@ -465,7 +461,6 @@ export function ModelManager({
                     onDownload={() => downloadModel(model.name)}
                     onCancel={() => cancelDownload(model.name)}
                     onDelete={() => deleteModel(model.name)}
-                    isDownloading={downloadingModels.has(model.name)}
                     displayName={getDisplayName(model.name)}
                   />
                 ))}
@@ -498,7 +493,6 @@ interface ModelCardProps {
   onDownload: () => void;
   onCancel: () => void;
   onDelete: () => void;
-  isDownloading: boolean;
   displayName: string;
 }
 
@@ -510,7 +504,6 @@ function ModelCard({
   onDownload,
   onCancel,
   onDelete,
-  isDownloading,
   displayName
 }: ModelCardProps) {
   const [isHovered, setIsHovered] = useState(false);

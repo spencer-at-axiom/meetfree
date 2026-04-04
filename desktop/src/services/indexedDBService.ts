@@ -29,6 +29,18 @@ export interface StoredTranscript {
   [key: string]: any;         // Allow additional fields from TranscriptUpdate
 }
 
+interface TranscriptForStorage {
+  text: string;
+  timestamp: string;
+  confidence: number;
+  sequence_id: number;
+  is_partial?: boolean;
+  chunk_start_time?: number;
+  audio_start_time?: number;
+  audio_end_time?: number;
+  duration?: number;
+}
+
 class IndexedDBService {
   private db: IDBDatabase | null = null;
   private readonly DB_NAME = 'MeetFreeRecoveryDB';
@@ -235,12 +247,25 @@ class IndexedDBService {
   /**
    * Save a transcript segment
    */
-  async saveTranscript(meetingId: string, transcript: any): Promise<void> {
+  async saveTranscript(meetingId: string, transcript: TranscriptForStorage): Promise<void> {
     try {
       if (!this.db) await this.init();
 
+      // Partial updates are transient and should not be persisted for crash recovery.
+      if (transcript.is_partial) {
+        return;
+      }
+
       const storedTranscript: StoredTranscript = {
-        ...transcript,
+        text: transcript.text,
+        timestamp: transcript.timestamp,
+        confidence: transcript.confidence,
+        sequenceId: transcript.sequence_id,
+        chunk_start_time: transcript.chunk_start_time,
+        audio_start_time: transcript.audio_start_time,
+        audio_end_time: transcript.audio_end_time,
+        duration: transcript.duration,
+        is_partial: false,
         meetingId,
         storedAt: Date.now()
       };
@@ -248,13 +273,53 @@ class IndexedDBService {
       const transaction = this.db!.transaction(['transcripts', 'meetings'], 'readwrite');
       const transcriptsStore = transaction.objectStore('transcripts');
       const meetingsStore = transaction.objectStore('meetings');
+      const transcriptIndex = transcriptsStore.index('meetingId');
 
-      // Save transcript
-      await new Promise<void>((resolve, reject) => {
-        const request = transcriptsStore.add(storedTranscript);
-        request.onsuccess = () => resolve();
+      // Upsert by meeting + sequenceId to avoid duplicate segments in recovery.
+      const existingTranscript = await new Promise<StoredTranscript | null>((resolve, reject) => {
+        const request = transcriptIndex.openCursor(IDBKeyRange.only(meetingId));
+
+        request.onsuccess = (event) => {
+          const cursor = (event.target as IDBRequest<IDBCursorWithValue | null>).result;
+          if (!cursor) {
+            resolve(null);
+            return;
+          }
+
+          const value = cursor.value as StoredTranscript;
+          if (value.sequenceId === storedTranscript.sequenceId) {
+            resolve({
+              ...value,
+              id: Number(cursor.primaryKey)
+            });
+            return;
+          }
+
+          cursor.continue();
+        };
+
         request.onerror = () => reject(request.error);
       });
+
+      const isNewTranscript = !existingTranscript;
+
+      if (existingTranscript) {
+        await new Promise<void>((resolve, reject) => {
+          const request = transcriptsStore.put({
+            ...existingTranscript,
+            ...storedTranscript,
+            id: existingTranscript.id,
+          });
+          request.onsuccess = () => resolve();
+          request.onerror = () => reject(request.error);
+        });
+      } else {
+        await new Promise<void>((resolve, reject) => {
+          const request = transcriptsStore.add(storedTranscript);
+          request.onsuccess = () => resolve();
+          request.onerror = () => reject(request.error);
+        });
+      }
 
       // Update meeting metadata
       const meeting = await new Promise<MeetingMetadata | null>((resolve, reject) => {
@@ -265,7 +330,9 @@ class IndexedDBService {
 
       if (meeting) {
         meeting.lastUpdated = Date.now();
-        meeting.transcriptCount += 1;
+        if (isNewTranscript) {
+          meeting.transcriptCount = (meeting.transcriptCount || 0) + 1;
+        }
         await new Promise<void>((resolve, reject) => {
           const request = meetingsStore.put(meeting);
           request.onsuccess = () => resolve();

@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useRef, useCallback } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import { listen } from '@tauri-apps/api/event';
 import { invoke } from '@tauri-apps/api/core';
 import { motion, AnimatePresence } from 'framer-motion';
@@ -371,7 +371,6 @@ export function ParakeetModelManager({
           onDownload={() => downloadModel(recommendedModel.name)}
           onCancel={() => cancelDownload(recommendedModel.name)}
           onDelete={() => deleteModel(recommendedModel.name)}
-          isDownloading={downloadingModels.has(recommendedModel.name)}
         />
       )}
 
@@ -392,7 +391,6 @@ export function ParakeetModelManager({
               onDownload={() => downloadModel(model.name)}
               onCancel={() => cancelDownload(model.name)}
               onDelete={() => deleteModel(model.name)}
-              isDownloading={downloadingModels.has(model.name)}
             />
           ))}
         </div>
@@ -421,7 +419,6 @@ interface ModelCardProps {
   onDownload: () => void;
   onCancel: () => void;
   onDelete: () => void;
-  isDownloading: boolean;
 }
 
 function ModelCard({
@@ -431,8 +428,7 @@ function ModelCard({
   onSelect,
   onDownload,
   onCancel,
-  onDelete,
-  isDownloading
+  onDelete
 }: ModelCardProps) {
   const [isHovered, setIsHovered] = useState(false);
   const displayInfo = getModelDisplayInfo(model.name);

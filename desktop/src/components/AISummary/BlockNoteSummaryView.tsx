@@ -77,7 +77,6 @@ export const BlockNoteSummaryView = forwardRef<BlockNoteSummaryViewRef, BlockNot
   const { format, data } = detectSummaryFormat(summaryData);
   const [isDirty, setIsDirty] = useState(false);
   const [currentBlocks, setCurrentBlocks] = useState<Block[]>([]);
-  const [isSaving, setIsSaving] = useState(false);
   const isContentLoaded = useRef(false);
 
   // Create BlockNote editor for markdown parsing
@@ -135,7 +134,6 @@ export const BlockNoteSummaryView = forwardRef<BlockNoteSummaryViewRef, BlockNot
   const handleSave = useCallback(async () => {
     if (!onSave || !isDirty) return;
 
-    setIsSaving(true);
     try {
       console.log('💾 Saving BlockNote content...');
 
@@ -152,8 +150,6 @@ export const BlockNoteSummaryView = forwardRef<BlockNoteSummaryViewRef, BlockNot
     } catch (err) {
       console.error('❌ Save failed:', err);
       alert('Failed to save changes. Please try again.');
-    } finally {
-      setIsSaving(false);
     }
   }, [onSave, isDirty, currentBlocks, editor]);
 

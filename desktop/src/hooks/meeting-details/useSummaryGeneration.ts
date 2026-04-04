@@ -1,7 +1,7 @@
 import { useState, useCallback } from 'react';
 import { Transcript, Summary } from '@/types';
 import { ModelConfig } from '@/components/ModelSettingsModal';
-import { CurrentMeeting, useSidebar } from '@/components/Sidebar/SidebarProvider';
+import { useSidebar } from '@/components/Sidebar/SidebarProvider';
 import { invoke as invokeTauri } from '@tauri-apps/api/core';
 import { toast } from 'sonner';
 import Analytics from '@/lib/analytics';
@@ -24,7 +24,7 @@ interface UseSummaryGenerationProps {
 
 export function useSummaryGeneration({
   meeting,
-  transcripts,
+  transcripts: _transcripts,
   modelConfig,
   isModelConfigLoading,
   selectedTemplate,
@@ -271,7 +271,8 @@ export function useSummaryGeneration({
           }
 
           // Remove MeetingName from data before formatting
-          const { MeetingName, ...summaryData } = pollingResult.data;
+          const summaryData = { ...pollingResult.data };
+          delete (summaryData as Record<string, unknown>).MeetingName;
 
           // Format legacy summary data
           const formattedSummary: Summary = {};

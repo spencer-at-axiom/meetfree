@@ -78,7 +78,7 @@ export function RecordingStateProvider({ children }: { children: React.ReactNode
       status,
       statusMessage: message,
     }));
-  }, [state.status, state.isRecording, state.isPaused]);
+  }, [state.status]);
 
   /**
    * Sync recording state with backend
@@ -95,7 +95,14 @@ export function RecordingStateProvider({ children }: { children: React.ReactNode
         isActive: backendState.is_active,
         recordingDuration: backendState.recording_duration,
         activeDuration: backendState.active_duration,
+        status: backendState.is_recording
+          ? (prev.status === RecordingStatus.IDLE ? RecordingStatus.RECORDING : prev.status)
+          : (prev.status === RecordingStatus.RECORDING ? RecordingStatus.IDLE : prev.status),
       }));
+
+      if (!backendState.is_recording && pollingIntervalRef.current) {
+        stopPolling();
+      }
 
       console.log('[RecordingStateContext] Synced with backend:', backendState);
     } catch (error) {
@@ -222,7 +229,20 @@ export function RecordingStateProvider({ children }: { children: React.ReactNode
    */
   useEffect(() => {
     console.log('[RecordingStateContext] Initial mount - syncing with backend');
-    syncWithBackend();
+    const runInitialSync = async () => {
+      await syncWithBackend();
+
+      try {
+        const isCurrentlyRecording = await recordingService.isRecording();
+        if (isCurrentlyRecording) {
+          startPolling();
+        }
+      } catch (error) {
+        console.warn('[RecordingStateContext] Failed to check initial recording state:', error);
+      }
+    };
+
+    runInitialSync();
   }, []);
 
   // NEW: Computed helpers from status

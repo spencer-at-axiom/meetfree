@@ -1,6 +1,5 @@
 import React, { useEffect, useState } from 'react';
-import { invoke } from '@tauri-apps/api/core';
-import { Download, Info } from 'lucide-react';
+import { Info } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { OnboardingContainer } from '../OnboardingContainer';
 import { useOnboarding } from '@/contexts/OnboardingContext';
@@ -13,30 +12,15 @@ import {
 
 export function SetupOverviewStep() {
   const { goNext } = useOnboarding();
-  const [recommendedModel, setRecommendedModel] = useState<string>('gemma3:1b');
-  const [modelSize, setModelSize] = useState<string>('~806 MB');
   const [isMac, setIsMac] = useState(false);
 
-  // Fetch recommended model on mount
   useEffect(() => {
-    const fetchRecommendedModel = async () => {
-      try {
-        const model = await invoke<string>('builtin_ai_get_recommended_model');
-        setRecommendedModel(model);
-        setModelSize(model === 'gemma3:4b' ? '~2.5 GB' : '~806 MB');
-      } catch (error) {
-        console.error('Failed to get recommended model:', error);
-        // Keep default gemma3:1b
-      }
-    };
-    fetchRecommendedModel();
-
     // Detect platform for totalSteps
     const checkPlatform = async () => {
       try {
         const { platform } = await import('@tauri-apps/plugin-os');
         setIsMac(platform() === 'macos');
-      } catch (e) {
+      } catch (_e) {
         setIsMac(navigator.userAgent.includes('Mac'));
       }
     };
@@ -71,7 +55,7 @@ export function SetupOverviewStep() {
         {/* Steps Card */}
         <div className="w-full max-w-md bg-white rounded-lg border border-gray-200 p-4">
           <div className="space-y-4">
-            {steps.map((step, idx) => {
+            {steps.map((step) => {
               return (
                 <div
                   key={step.number}

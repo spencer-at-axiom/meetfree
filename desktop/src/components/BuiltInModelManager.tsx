@@ -112,12 +112,14 @@ export function BuiltInModelManager({ selectedModel, onModelSelect }: BuiltInMod
           });
           // Clean up progress state
           setDownloadProgress((prev) => {
-            const { [model]: _, ...rest } = prev;
-            return rest;
+            const next = { ...prev };
+            delete next[model];
+            return next;
           });
           setDownloadProgressInfo((prev) => {
-            const { [model]: _, ...rest } = prev;
-            return rest;
+            const next = { ...prev };
+            delete next[model];
+            return next;
           });
           // Refresh models list
           fetchModels();
@@ -133,12 +135,14 @@ export function BuiltInModelManager({ selectedModel, onModelSelect }: BuiltInMod
           });
           // Clean up progress state
           setDownloadProgress((prev) => {
-            const { [model]: _, ...rest } = prev;
-            return rest;
+            const next = { ...prev };
+            delete next[model];
+            return next;
           });
           setDownloadProgressInfo((prev) => {
-            const { [model]: _, ...rest } = prev;
-            return rest;
+            const next = { ...prev };
+            delete next[model];
+            return next;
           });
           // Refresh models list
           fetchModels();
@@ -153,12 +157,14 @@ export function BuiltInModelManager({ selectedModel, onModelSelect }: BuiltInMod
           });
           // Clean up progress state
           setDownloadProgress((prev) => {
-            const { [model]: _, ...rest } = prev;
-            return rest;
+            const next = { ...prev };
+            delete next[model];
+            return next;
           });
           setDownloadProgressInfo((prev) => {
-            const { [model]: _, ...rest } = prev;
-            return rest;
+            const next = { ...prev };
+            delete next[model];
+            return next;
           });
 
           // Update model status to error locally instead of fetching from backend

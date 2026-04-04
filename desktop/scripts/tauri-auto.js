@@ -4,8 +4,6 @@
  */
 
 const { execSync } = require('child_process');
-const path = require('path');
-const fs = require('fs');
 const os = require('os');
 
 // Get the command (dev or build)
@@ -29,7 +27,7 @@ if (process.env.TAURI_GPU_FEATURE) {
       stdio: ['pipe', 'pipe', 'inherit']
     });
     feature = result.trim();
-  } catch (err) {
+  } catch (_err) {
     // If detection fails, continue with no features
   }
 }

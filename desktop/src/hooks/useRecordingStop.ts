@@ -1,6 +1,7 @@
-import { useState, useEffect, useCallback, useRef } from 'react';
+import { useEffect, useCallback, useRef } from 'react';
 import { useRouter } from 'next/navigation';
 import { listen } from '@tauri-apps/api/event';
+import { invoke } from '@tauri-apps/api/core';
 import { toast } from 'sonner';
 import { useTranscripts } from '@/contexts/TranscriptContext';
 import { useSidebar } from '@/components/Sidebar/SidebarProvider';
@@ -58,8 +59,6 @@ export function useRecordingStop(
   const {
     refetchMeetings,
     setCurrentMeeting,
-    setMeetings,
-    meetings,
     setIsMeetingActive,
   } = useSidebar();
 
@@ -195,7 +194,8 @@ export function useRecordingStop(
       console.log('🧹 CLEANUP: Cleaning up transcription-complete listener');
       unlistenComplete();
 
-      if (!transcriptionComplete && elapsedTime >= MAX_WAIT_TIME) {
+      const transcriptionTimedOut = !transcriptionComplete && elapsedTime >= MAX_WAIT_TIME;
+      if (transcriptionTimedOut) {
         console.warn('⏰ Transcription wait timeout reached after', elapsedTime, 'ms');
       } else {
         console.log('✅ Transcription completed after', elapsedTime, 'ms');
@@ -229,7 +229,7 @@ export function useRecordingStop(
       // Save to SQLite
       // NOTE: enabled to save COMPLETE transcripts after frontend receives all updates
       // This ensures user sees all transcripts streaming in before database save
-      if (isCallApi && transcriptionComplete == true) {
+      if (isCallApi) {
 
         setStatus(RecordingStatus.SAVING, 'Saving meeting to database...');
 
@@ -237,8 +237,16 @@ export function useRecordingStop(
         const freshTranscripts = [...transcriptsRef.current];
 
         // Get folder_path and meeting_name from recording-stopped event
-        const folderPath = sessionStorage.getItem('last_recording_folder_path');
+        let folderPath = sessionStorage.getItem('last_recording_folder_path');
         const savedMeetingName = sessionStorage.getItem('last_recording_meeting_name');
+
+        if (!folderPath) {
+          try {
+            folderPath = await invoke<string>('get_meeting_folder_path');
+          } catch (folderPathError) {
+            console.warn('Could not retrieve folder path from backend fallback:', folderPathError);
+          }
+        }
 
         console.log('💾 Saving COMPLETE transcripts to database...', {
           transcript_count: freshTranscripts.length,
@@ -296,7 +304,9 @@ export function useRecordingStop(
 
           // Show success toast with navigation option
           toast.success('Recording saved successfully!', {
-            description: `${freshTranscripts.length} transcript segments saved.`,
+            description: transcriptionTimedOut
+              ? `${freshTranscripts.length} transcript segments saved (transcription timed out; some segments may be missing).`
+              : `${freshTranscripts.length} transcript segments saved.`,
             action: {
               label: 'View Meeting',
               onClick: () => {
@@ -403,8 +413,6 @@ export function useRecordingStop(
     markMeetingAsSaved,
     refetchMeetings,
     setCurrentMeeting,
-    setMeetings,
-    meetings,
     setIsMeetingActive,
     router,
   ]);

@@ -34,6 +34,7 @@ export function TranscriptProvider({ children }: { children: ReactNode }) {
 
   // Refs for transcript management
   const transcriptsRef = useRef<Transcript[]>(transcripts);
+  const currentMeetingIdRef = useRef<string | null>(null);
   const isUserAtBottomRef = useRef<boolean>(true);
   const transcriptContainerRef = useRef<HTMLDivElement>(null);
   const finalFlushRef = useRef<(() => void) | null>(null);
@@ -42,6 +43,10 @@ export function TranscriptProvider({ children }: { children: ReactNode }) {
   useEffect(() => {
     transcriptsRef.current = transcripts;
   }, [transcripts]);
+
+  useEffect(() => {
+    currentMeetingIdRef.current = currentMeetingId;
+  }, [currentMeetingId]);
 
   // Smart auto-scroll: Track user scroll position
   useEffect(() => {
@@ -97,6 +102,7 @@ export function TranscriptProvider({ children }: { children: ReactNode }) {
             // Generate unique meeting ID
             const meetingId = `meeting-${Date.now()}`;
             setCurrentMeetingId(meetingId);
+            currentMeetingIdRef.current = meetingId;
 
             // Store in sessionStorage as fallback for markMeetingAsSaved
             sessionStorage.setItem('indexeddb_current_meeting_id', meetingId);
@@ -134,7 +140,7 @@ export function TranscriptProvider({ children }: { children: ReactNode }) {
                   await indexedDBService.saveMeetingMetadata(metadata);
                 }
               }
-            } catch (error) {
+            } catch (_error) {
               // Non-fatal - will be set on stop if recording completes normally
             }
           } catch (error) {
@@ -145,9 +151,12 @@ export function TranscriptProvider({ children }: { children: ReactNode }) {
         // Listen for recording-stopped event
         unlistenRecordingStopped = await recordingService.onRecordingStopped(async (payload) => {
           try {
-            if (currentMeetingId) {
+            const activeMeetingId =
+              currentMeetingIdRef.current || sessionStorage.getItem('indexeddb_current_meeting_id');
+
+            if (activeMeetingId) {
               // Update folder path in IndexedDB
-              const metadata = await indexedDBService.getMeetingMetadata(currentMeetingId);
+              const metadata = await indexedDBService.getMeetingMetadata(activeMeetingId);
 
               if (metadata && payload.folder_path) {
                 metadata.folderPath = payload.folder_path;
@@ -175,13 +184,13 @@ export function TranscriptProvider({ children }: { children: ReactNode }) {
         console.log('🧹 Recording stopped listener cleaned up');
       }
     };
-  }, [currentMeetingId]);
+  }, []);
 
   // Main transcript buffering logic with sequence_id ordering
   useEffect(() => {
     let unlistenFn: (() => void) | undefined;
     let transcriptCounter = 0;
-    let transcriptBuffer = new Map<number, Transcript>();
+    const transcriptBuffer = new Map<number, Transcript>();
     let lastProcessedSequence = 0;
     let processingTimer: NodeJS.Timeout | undefined;
 
@@ -322,8 +331,10 @@ export function TranscriptProvider({ children }: { children: ReactNode }) {
           console.log(`✅ MAIN LISTENER: Buffered transcript with sequence_id ${update.sequence_id}. Buffer size: ${transcriptBuffer.size}, Last processed: ${lastProcessedSequence}`);
 
           // Save to IndexedDB (non-blocking)
-          if (currentMeetingId) {
-            indexedDBService.saveTranscript(currentMeetingId, update)
+          const activeMeetingId =
+            currentMeetingIdRef.current || sessionStorage.getItem('indexeddb_current_meeting_id');
+          if (activeMeetingId) {
+            indexedDBService.saveTranscript(activeMeetingId, update)
               .catch(err => console.warn('IndexedDB save failed:', err));
           }
 
@@ -356,7 +367,7 @@ export function TranscriptProvider({ children }: { children: ReactNode }) {
         console.log('🧹 CLEANUP: MAIN transcript listener cleaned up');
       }
     };
-  }, [currentMeetingId]); // Add currentMeetingId dependency
+  }, []);
 
   // Sync transcript history and meeting name from backend on reload
   // This fixes the issue where reloading during active recording causes state desync
@@ -503,6 +514,7 @@ export function TranscriptProvider({ children }: { children: ReactNode }) {
 
       // Clear both sources
       setCurrentMeetingId(null);
+      currentMeetingIdRef.current = null;
       sessionStorage.removeItem('indexeddb_current_meeting_id');
     } catch (error) {
       console.error('[IndexedDB] ❌ Failed to mark meeting as saved:', error);
