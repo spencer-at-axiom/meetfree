@@ -65,25 +65,15 @@ export interface SummaryResponse {
   };
 }
 
-// BlockNote-specific types
-export type SummaryFormat = 'legacy' | 'markdown' | 'blocknote';
-
-export interface BlockNoteBlock {
-  id: string;
-  type: string;
-  props?: Record<string, any>;
-  content?: any[];
-  children?: BlockNoteBlock[];
-}
-
-export interface SummaryDataResponse {
-  markdown?: string;
-  summary_json?: BlockNoteBlock[];
-  // Legacy format fields
-  MeetingName?: string;
-  _section_order?: string[];
-  [key: string]: any; // For legacy section data
-}
+// Summary contract v0.1.0 types (schema-first source of truth lives in src/contracts).
+export type {
+  BlockNoteBlock,
+  SummaryBlocknotePayload,
+  SummaryMarkdownPayload,
+  SummaryPayload,
+} from '@/contracts/summaryContract';
+export type SummaryFormat = import('@/contracts/summaryContract').SummaryPayload['format'];
+export type SummaryDataResponse = import('@/contracts/summaryContract').SummaryPayload;
 
 // Pagination types for optimized transcript loading
 export interface MeetingMetadata {

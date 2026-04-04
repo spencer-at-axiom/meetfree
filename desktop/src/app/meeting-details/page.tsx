@@ -1,7 +1,7 @@
 "use client"
 import { useSidebar } from "@/components/Sidebar/SidebarProvider";
 import { useState, useEffect, useCallback, Suspense } from "react";
-import { Transcript, Summary, SummaryDataResponse, Block } from "@/types";
+import { Transcript } from "@/types";
 import PageContent from "./page-content";
 import { useRouter, useSearchParams } from "next/navigation";
 import Analytics from "@/lib/analytics";
@@ -10,6 +10,10 @@ import { LoaderIcon } from "lucide-react";
 import { useConfig } from "@/contexts/ConfigContext";
 import { usePaginatedTranscripts } from "@/hooks/usePaginatedTranscripts";
 import type { ModelConfig } from "@/services/configService";
+import {
+  parseSummaryPayloadFromApiData,
+  type SummaryPayload,
+} from "@/contracts/summaryContract";
 
 interface MeetingDetailsResponse {
   id: string;
@@ -26,21 +30,8 @@ interface OllamaModelInfo {
 
 interface SummaryApiResponse {
   status: string;
-  data?: SummaryDataResponse | string | null;
+  data?: unknown;
   error?: string;
-}
-
-interface LegacySummaryBlock extends Partial<Block> {
-  content?: string;
-}
-
-interface LegacySummarySection {
-  title?: string;
-  blocks?: LegacySummaryBlock[];
-}
-
-function isRecord(value: unknown): value is Record<string, unknown> {
-  return typeof value === "object" && value !== null;
 }
 
 function MeetingDetailsContent() {
@@ -51,7 +42,7 @@ function MeetingDetailsContent() {
   const { isAutoSummary } = useConfig(); // Get auto-summary toggle state
   const router = useRouter();
   const [meetingDetails, setMeetingDetails] = useState<MeetingDetailsResponse | null>(null);
-  const [meetingSummary, setMeetingSummary] = useState<Summary | SummaryDataResponse | null>(null);
+  const [meetingSummary, setMeetingSummary] = useState<SummaryPayload | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [isLoading, setIsLoading] = useState<boolean>(true);
   const [shouldAutoGenerate, setShouldAutoGenerate] = useState<boolean>(false);
@@ -239,87 +230,15 @@ function MeetingDetailsContent() {
           return;
         }
 
-        const summaryData = summary.data ?? {};
-
-        // Parse if it's a JSON string (backend may return double-encoded JSON)
-        let parsedData: SummaryDataResponse | Record<string, unknown> = isRecord(summaryData) ? summaryData : {};
-        if (typeof summaryData === 'string') {
-          try {
-            const parsedJson: unknown = JSON.parse(summaryData);
-            parsedData = isRecord(parsedJson) ? parsedJson : {};
-          } catch {
-            parsedData = {};
-          }
-        }
-
-        console.log('🔍 FETCH SUMMARY: Parsed data:', parsedData);
-
-        // Priority 1: BlockNote JSON format
-        if ('summary_json' in parsedData && Array.isArray(parsedData.summary_json)) {
-          setMeetingSummary(parsedData as SummaryDataResponse);
+        const parsed = parseSummaryPayloadFromApiData(summary.data);
+        if (!parsed.ok) {
+          console.error('FETCH SUMMARY: Invalid summary contract payload', parsed.error);
+          setMeetingSummary(null);
           return;
         }
 
-        // Priority 2: Markdown format
-        if ('markdown' in parsedData && typeof parsedData.markdown === 'string') {
-          setMeetingSummary(parsedData as SummaryDataResponse);
-          return;
-        }
-
-        // Legacy format - apply formatting
-        console.log('LEGACY FORMAT: Detected legacy format, applying section formatting');
-
-        const { _section_order, ...restSummaryData } = parsedData;
-
-        // Format the summary data with consistent styling - PRESERVE ORDER
-        const formattedSummary: Summary = {};
-
-        // Use section order if available to maintain exact order and handle duplicates
-        const sectionKeys = Array.isArray(_section_order) ? _section_order : Object.keys(restSummaryData);
-
-        console.log('LEGACY FORMAT: Processing sections:', sectionKeys);
-
-        for (const key of sectionKeys) {
-          try {
-            const section = restSummaryData[key];
-            // Comprehensive null checks to prevent the error
-            if (section &&
-              typeof section === 'object' &&
-              'title' in section &&
-              'blocks' in section) {
-              const typedSection = section as LegacySummarySection;
-
-              // Ensure blocks is an array before mapping
-              if (Array.isArray(typedSection.blocks)) {
-                formattedSummary[key] = {
-                  title: typedSection.title || key,
-                  blocks: typedSection.blocks.map((block, index) => ({
-                    ...block,
-                    id: block.id ?? `${key}-${index}`,
-                    type: block.type ?? 'bullet',
-                    color: 'default',
-                    content: typeof block.content === 'string' ? block.content.trim() : '',
-                  }))
-                };
-              } else {
-                // Handle case where blocks is not an array
-                console.warn(`LEGACY FORMAT: Section ${key} has invalid blocks:`, typedSection.blocks);
-                formattedSummary[key] = {
-                  title: typedSection.title || key,
-                  blocks: []
-                };
-              }
-            } else {
-              console.warn(`LEGACY FORMAT: Skipping invalid section ${key}:`, section);
-            }
-          } catch (error) {
-            console.warn(`LEGACY FORMAT: Error processing section ${key}:`, error);
-            // Continue processing other sections
-          }
-        }
-
-        console.log('LEGACY FORMAT: Formatted summary:', formattedSummary);
-        setMeetingSummary(formattedSummary);
+        console.log('FETCH SUMMARY: Parsed v0.1.0 payload:', parsed.data.format);
+        setMeetingSummary(parsed.data);
       } catch (error) {
         console.error('FETCH SUMMARY: Error fetching meeting summary:', error);
         // Don't set error state for summary fetch failure, set to null to show generate button
@@ -417,3 +336,4 @@ export default function MeetingDetails() {
     </Suspense>
   );
 }
+

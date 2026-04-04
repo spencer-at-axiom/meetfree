@@ -1,13 +1,14 @@
 "use client";
 import { useState, useEffect, useRef } from 'react';
 import { motion } from 'framer-motion';
-import { Summary, SummaryDataResponse, SummaryResponse, Transcript, TranscriptSegmentData } from '@/types';
+import { Transcript, TranscriptSegmentData } from '@/types';
 import Analytics from '@/lib/analytics';
 import { invoke } from '@tauri-apps/api/core';
 import { toast } from 'sonner';
 import { TranscriptPanel } from '@/components/MeetingDetails/TranscriptPanel';
 import { SummaryPanel } from '@/components/MeetingDetails/SummaryPanel';
 import { ModelConfig } from '@/components/ModelSettingsModal';
+import { type SummaryPayload } from '@/contracts/summaryContract';
 
 // Custom hooks
 import { useMeetingData } from '@/hooks/meeting-details/useMeetingData';
@@ -25,7 +26,7 @@ interface MeetingPageContentProps {
     transcripts: Transcript[];
     folder_path?: string;
   };
-  summaryData: Summary | SummaryDataResponse | null;
+  summaryData: SummaryPayload | null;
   shouldAutoGenerate?: boolean;
   onAutoGenerateComplete?: () => void;
   onMeetingUpdated?: () => Promise<void>;
@@ -62,7 +63,6 @@ export default function PageContent({
   // State
   const [customPrompt, setCustomPrompt] = useState<string>('');
   const [isRecording] = useState(false);
-  const [summaryResponse] = useState<SummaryResponse | null>(null);
 
   // Ref to store the modal open function from SummaryGeneratorButtonGroup
   const openModelSettingsRef = useRef<(() => void) | null>(null);
@@ -116,7 +116,6 @@ export default function PageContent({
   const {
     handleGenerateSummary,
     handleStopGeneration,
-    handleRegenerateSummary,
     summaryStatus,
     summaryError,
     getSummaryStatusMessage,
@@ -211,8 +210,6 @@ export default function PageContent({
           onRefetchTranscripts={onRefetchTranscripts}
         />
         <SummaryPanel
-          meeting={meeting}
-          meetingTitle={meetingData.meetingTitle}
           isTitleDirty={meetingData.isTitleDirty}
           summaryRef={meetingData.blockNoteSummaryRef}
           isSaving={meetingData.isSaving}
@@ -228,12 +225,9 @@ export default function PageContent({
           onGenerateSummary={handleGenerateSummary}
           onStopGeneration={handleStopGeneration}
           customPrompt={customPrompt}
-          summaryResponse={summaryResponse}
           onSaveSummary={meetingData.handleSaveSummary}
-          onSummaryChange={meetingData.handleSummaryChange}
           onDirtyChange={meetingData.setIsSummaryDirty}
           summaryError={summaryError}
-          onRegenerateSummary={handleRegenerateSummary}
           getSummaryStatusMessage={getSummaryStatusMessage}
           availableTemplates={templates.availableTemplates}
           selectedTemplate={templates.selectedTemplate}

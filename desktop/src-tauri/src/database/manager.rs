@@ -1,3 +1,4 @@
+use crate::summary::contract::run_startup_migration;
 use sqlx::{migrate::MigrateDatabase, Result, Sqlite, SqlitePool, Transaction};
 use std::fs;
 use std::path::Path;
@@ -24,6 +25,17 @@ impl DatabaseManager {
         let pool = SqlitePool::connect(tauri_db_path).await?;
 
         sqlx::migrate!("./migrations").run(&pool).await?;
+
+        let migration_report = run_startup_migration(&pool).await.map_err(|error| {
+            sqlx::Error::Protocol(format!("summary startup migration failed: {}", error))
+        })?;
+        log::info!(
+            "Summary contract startup migration: scanned={}, canonical={}, migrated={}, failed={}",
+            migration_report.scanned,
+            migration_report.already_canonical,
+            migration_report.migrated,
+            migration_report.failed
+        );
 
         Ok(DatabaseManager { pool })
     }

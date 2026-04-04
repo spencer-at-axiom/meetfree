@@ -2,6 +2,7 @@ use crate::database::repositories::{
     meeting::MeetingsRepository, setting::SettingsRepository, summary::SummaryProcessesRepository,
 };
 use crate::ollama::metadata::ModelMetadataCache;
+use crate::summary::contract::markdown_payload_value;
 use crate::summary::llm_client::LLMProvider;
 use crate::summary::processor::{extract_meeting_name_from_markdown, generate_meeting_summary};
 use once_cell::sync::Lazy;
@@ -310,10 +311,8 @@ impl SummaryService {
                     }
                 }
 
-                // Create result JSON with markdown only (summary_json will be added on first edit)
-                let result_json = serde_json::json!({
-                    "markdown": final_markdown,
-                });
+                // Persist canonical v0.1.0 markdown summary payload.
+                let result_json = markdown_payload_value(final_markdown);
 
                 // Update database with completed status
                 if let Err(e) = SummaryProcessesRepository::update_process_completed(

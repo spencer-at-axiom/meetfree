@@ -1,28 +1,22 @@
 "use client";
 
-import { BlockNoteBlock, Summary, SummaryResponse, Transcript } from '@/types';
+import { Transcript } from '@/types';
 import { BlockNoteSummaryView, BlockNoteSummaryViewRef } from '@/components/AISummary/BlockNoteSummaryView';
 import { EmptyStateSummary } from '@/components/EmptyStateSummary';
 import { ModelConfig } from '@/components/ModelSettingsModal';
 import { SummaryGeneratorButtonGroup } from './SummaryGeneratorButtonGroup';
 import { SummaryUpdaterButtonGroup } from './SummaryUpdaterButtonGroup';
-import Analytics from '@/lib/analytics';
 import { RefObject } from 'react';
+import { type SummaryPayload } from '@/contracts/summaryContract';
 
 interface SummaryPanelProps {
-  meeting: {
-    id: string;
-    title: string;
-    created_at: string;
-  };
-  meetingTitle: string;
   isTitleDirty: boolean;
   summaryRef: RefObject<BlockNoteSummaryViewRef>;
   isSaving: boolean;
   onSaveAll: () => Promise<void>;
   onCopySummary: () => Promise<void>;
   onOpenFolder: () => Promise<void>;
-  aiSummary: Summary | null;
+  aiSummary: SummaryPayload | null;
   summaryStatus: 'idle' | 'processing' | 'summarizing' | 'regenerating' | 'completed' | 'error';
   transcripts: Transcript[];
   modelConfig: ModelConfig;
@@ -31,12 +25,9 @@ interface SummaryPanelProps {
   onGenerateSummary: (customPrompt: string) => Promise<void>;
   onStopGeneration: () => void;
   customPrompt: string;
-  summaryResponse: SummaryResponse | null;
-  onSaveSummary: (summary: Summary | { markdown?: string; summary_json?: BlockNoteBlock[] }) => Promise<void>;
-  onSummaryChange: (summary: Summary) => void;
+  onSaveSummary: (summary: SummaryPayload) => Promise<void>;
   onDirtyChange: (isDirty: boolean) => void;
   summaryError: string | null;
-  onRegenerateSummary: () => Promise<void>;
   getSummaryStatusMessage: (status: 'idle' | 'processing' | 'summarizing' | 'regenerating' | 'completed' | 'error') => string;
   availableTemplates: Array<{ id: string, name: string, description: string }>;
   selectedTemplate: string;
@@ -46,8 +37,6 @@ interface SummaryPanelProps {
 }
 
 export function SummaryPanel({
-  meeting,
-  meetingTitle,
   isTitleDirty,
   summaryRef,
   isSaving,
@@ -63,12 +52,9 @@ export function SummaryPanel({
   onGenerateSummary,
   onStopGeneration,
   customPrompt,
-  summaryResponse,
   onSaveSummary,
-  onSummaryChange,
   onDirtyChange,
   summaryError,
-  onRegenerateSummary,
   getSummaryStatusMessage,
   availableTemplates,
   selectedTemplate,
@@ -188,69 +174,14 @@ export function SummaryPanel({
         </div>
       ) : aiSummary ? (
         <div className="flex-1 overflow-y-auto min-h-0">
-          {summaryResponse && (
-            <div className="fixed bottom-0 left-0 right-0 bg-white shadow-lg p-4 max-h-1/3 overflow-y-auto">
-              <h3 className="text-lg font-semibold mb-2">Meeting Summary</h3>
-              <div className="grid grid-cols-2 gap-4">
-                <div className="bg-white p-4 rounded-lg shadow-sm">
-                  <h4 className="font-medium mb-1">Key Points</h4>
-                  <ul className="list-disc pl-4">
-                    {summaryResponse.summary.key_points.blocks.map((block, i) => (
-                      <li key={i} className="text-sm">{block.content}</li>
-                    ))}
-                  </ul>
-                </div>
-                <div className="bg-white p-4 rounded-lg shadow-sm mt-4">
-                  <h4 className="font-medium mb-1">Action Items</h4>
-                  <ul className="list-disc pl-4">
-                    {summaryResponse.summary.action_items.blocks.map((block, i) => (
-                      <li key={i} className="text-sm">{block.content}</li>
-                    ))}
-                  </ul>
-                </div>
-                <div className="bg-white p-4 rounded-lg shadow-sm mt-4">
-                  <h4 className="font-medium mb-1">Decisions</h4>
-                  <ul className="list-disc pl-4">
-                    {summaryResponse.summary.decisions.blocks.map((block, i) => (
-                      <li key={i} className="text-sm">{block.content}</li>
-                    ))}
-                  </ul>
-                </div>
-                <div className="bg-white p-4 rounded-lg shadow-sm mt-4">
-                  <h4 className="font-medium mb-1">Main Topics</h4>
-                  <ul className="list-disc pl-4">
-                    {summaryResponse.summary.main_topics.blocks.map((block, i) => (
-                      <li key={i} className="text-sm">{block.content}</li>
-                    ))}
-                  </ul>
-                </div>
-              </div>
-              {summaryResponse.raw_summary ? (
-                <div className="mt-4">
-                  <h4 className="font-medium mb-1">Full Summary</h4>
-                  <p className="text-sm whitespace-pre-wrap">{summaryResponse.raw_summary}</p>
-                </div>
-              ) : null}
-            </div>
-          )}
           <div className="p-6 w-full">
             <BlockNoteSummaryView
               ref={summaryRef}
               summaryData={aiSummary}
               onSave={onSaveSummary}
-              onSummaryChange={onSummaryChange}
               onDirtyChange={onDirtyChange}
               status={summaryStatus}
               error={summaryError}
-              onRegenerateSummary={() => {
-                Analytics.trackButtonClick('regenerate_summary', 'meeting_details');
-                onRegenerateSummary();
-              }}
-              meeting={{
-                id: meeting.id,
-                title: meetingTitle,
-                created_at: meeting.created_at
-              }}
             />
           </div>
           {summaryStatus !== 'idle' && (

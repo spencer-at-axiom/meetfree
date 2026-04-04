@@ -3,6 +3,9 @@ use crate::database::repositories::{
     transcript_chunk::TranscriptChunksRepository,
 };
 use crate::state::AppState;
+use crate::summary::contract::{
+    validate_and_normalize_summary_payload, validate_summary_payload_value,
+};
 use crate::summary::service::SummaryService;
 use log::{error as log_error, info as log_info, warn as log_warn};
 use serde::{Deserialize, Serialize};
@@ -28,7 +31,7 @@ pub struct ProcessTranscriptResponse {
 
 /// Saves a meeting summary (Native SQLx implementation)
 ///
-/// Expected format: { "markdown": "...", "summary_json": [...BlockNote blocks...] }
+/// Expected format: Summary contract v0.1.0 payload only.
 #[tauri::command]
 pub async fn api_save_meeting_summary<R: Runtime>(
     _app: AppHandle<R>,
@@ -36,14 +39,28 @@ pub async fn api_save_meeting_summary<R: Runtime>(
     meeting_id: String,
     summary: serde_json::Value,
     _auth_token: Option<String>,
-) -> Result<serde_json::Value, String> {
+) -> Result<serde_json::Value, serde_json::Value> {
     log_info!(
         "api_save_meeting_summary (native) called for meeting_id: {}",
         meeting_id
     );
     let pool = state.db_manager.pool();
 
-    match SummaryProcessesRepository::update_meeting_summary(pool, &meeting_id, &summary).await {
+    let normalized_summary = match validate_and_normalize_summary_payload(summary) {
+        Ok(payload) => payload,
+        Err(error) => {
+            log_warn!(
+                "Summary payload validation failed for meeting_id {}: {}",
+                meeting_id,
+                error.message
+            );
+            return Err(error.to_json_value());
+        }
+    };
+
+    match SummaryProcessesRepository::update_meeting_summary(pool, &meeting_id, &normalized_summary)
+        .await
+    {
         Ok(true) => {
             log_info!("Summary saved successfully for meeting_id: {}", meeting_id);
             Ok(serde_json::json!({
@@ -52,14 +69,20 @@ pub async fn api_save_meeting_summary<R: Runtime>(
         }
         Ok(false) => {
             log_warn!(
-                "Meeting not found or invalid JSON for meeting_id: {}",
+                "Meeting not found when saving summary for meeting_id: {}",
                 meeting_id
             );
-            Err("Meeting not found or can't convert the json".into())
+            Err(serde_json::json!({
+                "code": "MEETING_NOT_FOUND",
+                "message": "Meeting not found"
+            }))
         }
         Err(e) => {
             log_error!("Failed to save meeting summary for {}: {}", meeting_id, e);
-            Err(e.to_string())
+            Err(serde_json::json!({
+                "code": "SUMMARY_SAVE_FAILED",
+                "message": e.to_string()
+            }))
         }
     }
 }
@@ -89,7 +112,17 @@ pub async fn api_get_summary<R: Runtime>(
             // This allows displaying restored summaries after cancellation or failure
             let data = if let Some(result_str) = process.result {
                 match serde_json::from_str::<serde_json::Value>(&result_str) {
-                    Ok(parsed) => Some(parsed),
+                    Ok(parsed) => match validate_summary_payload_value(&parsed) {
+                        Ok(payload) => Some(payload.to_json_value()),
+                        Err(error) => {
+                            log_error!(
+                                "Stored summary payload failed contract validation for {}: {}",
+                                meeting_id,
+                                error.message
+                            );
+                            None
+                        }
+                    },
                     Err(e) => {
                         log_error!("Failed to parse summary result JSON: {}", e);
                         None

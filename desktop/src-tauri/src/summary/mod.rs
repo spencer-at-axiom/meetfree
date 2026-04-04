@@ -30,6 +30,7 @@ pub struct CustomOpenAIConfig {
 }
 
 pub mod commands;
+pub mod contract;
 pub mod llm_client;
 pub mod processor;
 pub mod service;
