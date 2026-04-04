@@ -16,10 +16,22 @@ export const DEFAULT_WHISPER_MODEL = 'large-v3-turbo';
 export const DEFAULT_PARAKEET_MODEL = 'parakeet-tdt-0.6b-v3-int8';
 
 /**
+ * Default built-in summary model for local-first summary generation.
+ * This matches the native first-run configuration for fresh installs.
+ */
+export const DEFAULT_BUILTIN_SUMMARY_MODEL = 'gemma3:1b';
+
+/**
+ * Default summary provider for the local-first happy path.
+ */
+export const DEFAULT_SUMMARY_PROVIDER = 'builtin-ai';
+
+/**
  * Model defaults by provider type
  */
 export const MODEL_DEFAULTS = {
   whisper: DEFAULT_WHISPER_MODEL,
   localWhisper: DEFAULT_WHISPER_MODEL,
   parakeet: DEFAULT_PARAKEET_MODEL,
+  'builtin-ai': DEFAULT_BUILTIN_SUMMARY_MODEL,
 } as const;

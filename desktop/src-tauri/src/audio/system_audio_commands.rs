@@ -120,7 +120,7 @@ mod tests {
         match devices {
             Ok(device_list) => {
                 println!("System audio devices: {:?}", device_list);
-                assert!(device_list.len() >= 0); // Should at least not crash
+                assert!(device_list.iter().all(|name| !name.trim().is_empty()));
             }
             Err(e) => {
                 println!("Error listing devices: {}", e);

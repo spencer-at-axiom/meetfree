@@ -92,7 +92,7 @@ pub struct Setting {
     #[sqlx(rename = "ollamaEndpoint")]
     #[serde(rename = "ollamaEndpoint")]
     pub ollama_endpoint: Option<String>,
-    /// Custom OpenAI-compatible endpoint configuration stored as JSON
+    /// Custom OpenAI-compatible endpoint configuration stored as JSON without the API key.
     #[sqlx(rename = "customOpenAIConfig")]
     #[serde(rename = "customOpenAIConfig")]
     pub custom_openai_config: Option<String>,

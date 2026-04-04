@@ -14,6 +14,7 @@ import {
   parseSummaryPayloadFromApiData,
   type SummaryPayload,
 } from "@/contracts/summaryContract";
+import { DEFAULT_BUILTIN_SUMMARY_MODEL } from "@/constants/modelDefaults";
 
 interface MeetingDetailsResponse {
   id: string;
@@ -22,10 +23,6 @@ interface MeetingDetailsResponse {
   updated_at: string;
   transcripts: Transcript[];
   folder_path?: string;
-}
-
-interface OllamaModelInfo {
-  name: string;
 }
 
 interface SummaryApiResponse {
@@ -63,16 +60,15 @@ function MeetingDetailsContent() {
     error: transcriptError,
   } = usePaginatedTranscripts({ meetingId: meetingId || '' });
 
-  // Check if gemma3:1b model is available in Ollama
-  const checkForGemmaModel = useCallback(async (): Promise<boolean> => {
+  // Check if any built-in summary model is available for the default local path.
+  const getAvailableBuiltinSummaryModel = useCallback(async (): Promise<string | null> => {
     try {
-      const models = await invoke<OllamaModelInfo[]>('get_ollama_models', { endpoint: null });
-      const hasGemma = models.some((model) => model.name === 'gemma3:1b');
-      console.log('🔍 Checked for gemma3:1b:', hasGemma);
-      return hasGemma;
+      const model = await invoke<string | null>('builtin_ai_get_available_summary_model');
+      console.log('Checked for available built-in summary model:', model);
+      return model;
     } catch (error) {
-      console.error('❌ Failed to check Ollama models:', error);
-      return false;
+      console.error('Failed to check built-in summary models:', error);
+      return null;
     }
   }, []);
 
@@ -106,15 +102,15 @@ function MeetingDetailsContent() {
         return;
       }
 
-      // DB is empty - check if gemma3:1b exists as fallback
-      const hasGemma = await checkForGemmaModel();
+      // DB is empty - only fall back to the local built-in summary path.
+      const availableBuiltinModel = await getAvailableBuiltinSummaryModel();
 
-      if (hasGemma) {
-        console.log('💾 DB empty, using gemma3:1b as initial default');
+      if (availableBuiltinModel) {
+        console.log('DB empty, using available built-in summary model:', availableBuiltinModel);
 
         await invoke('model_cfg_set', {
-          provider: 'ollama',
-          model: 'gemma3:1b',
+          provider: 'builtin-ai',
+          model: availableBuiltinModel || DEFAULT_BUILTIN_SUMMARY_MODEL,
           whisperModel: 'large-v3',
           apiKey: null,
           ollamaEndpoint: null,
@@ -122,14 +118,14 @@ function MeetingDetailsContent() {
 
         setShouldAutoGenerate(true);
       } else {
-        console.log('⚠️ No model configured and gemma3:1b not found');
+        console.log('No configured summary model and no downloaded built-in model available yet');
       }
     } catch (error) {
-      console.error('❌ Failed to setup auto-generation:', error);
+      console.error('Failed to setup auto-generation:', error);
     }
 
     setHasCheckedAutoGen(true);
-  }, [hasCheckedAutoGen, checkForGemmaModel, source, isAutoSummary]);
+  }, [hasCheckedAutoGen, getAvailableBuiltinSummaryModel, source, isAutoSummary]);
 
   // Sync meeting metadata from pagination hook to meeting details state
   useEffect(() => {
@@ -336,4 +332,5 @@ export default function MeetingDetails() {
     </Suspense>
   );
 }
+
 

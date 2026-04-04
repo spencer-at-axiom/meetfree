@@ -95,12 +95,13 @@ Release CI should be green on the deterministic test suite.
 
 If onboarding completes before the built-in summary model is available, the app must clearly say so and behave accordingly.
 
-### 4. Secure Or Explicitly Constrain Provider Secrets
+### 4. Keep Provider Secrets In Secure Storage
 
-API keys are currently stored locally in app settings. For v0.1.0:
+Provider API keys should stay in OS-backed credential storage for v0.1.0.
 
-- either move secrets to OS-native credential storage
-- or limit release messaging so storage behavior is explicit and honest
+- validate the keyring-backed path on supported platforms
+- keep non-secret provider settings in local app storage
+- keep release messaging explicit about what is secret storage vs local config
 
 ### 5. Rationalize Beta Features
 

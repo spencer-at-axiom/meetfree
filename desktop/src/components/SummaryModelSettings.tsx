@@ -6,6 +6,10 @@ import { toast } from 'sonner';
 import { ModelConfig, ModelSettingsModal } from '@/components/ModelSettingsModal';
 import { Switch } from './ui/switch';
 import { useConfig } from '@/contexts/ConfigContext';
+import {
+  DEFAULT_BUILTIN_SUMMARY_MODEL,
+  DEFAULT_SUMMARY_PROVIDER,
+} from '@/constants/modelDefaults';
 
 interface SummaryModelSettingsProps {
   refetchTrigger?: number; // Change this to trigger refetch
@@ -13,8 +17,8 @@ interface SummaryModelSettingsProps {
 
 export function SummaryModelSettings({ refetchTrigger }: SummaryModelSettingsProps) {
   const [modelConfig, setModelConfig] = useState<ModelConfig>({
-    provider: 'ollama',
-    model: 'llama3.2:latest',
+    provider: DEFAULT_SUMMARY_PROVIDER,
+    model: DEFAULT_BUILTIN_SUMMARY_MODEL,
     whisperModel: 'large-v3',
     apiKey: null,
     ollamaEndpoint: null

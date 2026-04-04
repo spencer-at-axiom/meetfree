@@ -36,6 +36,7 @@ macro_rules! perf_trace {
 pub mod anthropic;
 pub mod api;
 pub mod audio;
+pub mod bootstrap;
 pub mod brand;
 pub mod config;
 pub mod console_utils;
@@ -56,9 +57,7 @@ pub mod whisper_engine;
 use audio::{list_audio_devices, trigger_audio_permission, AudioDevice};
 use log::{error as log_error, info as log_info};
 use notifications::commands::NotificationManagerState;
-use std::sync::Arc;
 use tauri::{AppHandle, Manager, Runtime};
-use tokio::sync::RwLock;
 
 static RECORDING_FLAG: AtomicBool = AtomicBool::new(false);
 
@@ -381,125 +380,8 @@ pub fn get_language_preference_internal() -> Option<String> {
 pub fn run() {
     log::set_max_level(log::LevelFilter::Info);
 
-    tauri::Builder::default()
-        .plugin(tauri_plugin_notification::init())
-        .plugin(tauri_plugin_store::Builder::default().build())
-        .plugin(tauri_plugin_dialog::init())
-        .plugin(tauri_plugin_updater::Builder::new().build())
-        .plugin(tauri_plugin_process::init())
-        .manage(whisper_engine::parallel_commands::ParallelProcessorState::new())
-        .manage(Arc::new(RwLock::new(
-            None::<notifications::manager::NotificationManager<tauri::Wry>>,
-        )) as NotificationManagerState<tauri::Wry>)
-        .manage(audio::init_system_audio_state())
-        .manage(summary::summary_engine::ModelManagerState(Arc::new(
-            tokio::sync::Mutex::new(None),
-        )))
-        .setup(|_app| {
-            log::info!("Application setup complete");
-
-            // Initialize system tray
-            if let Err(e) = tray::create_tray(_app.handle()) {
-                log::error!("Failed to create system tray: {}", e);
-            }
-
-            // Initialize notification system with proper defaults
-            log::info!("Initializing notification system...");
-            let app_for_notif = _app.handle().clone();
-            tauri::async_runtime::spawn(async move {
-                let notif_state = app_for_notif.state::<NotificationManagerState<tauri::Wry>>();
-                match notifications::commands::initialize_notification_manager(
-                    app_for_notif.clone(),
-                )
-                .await
-                {
-                    Ok(manager) => {
-                        // Set default consent and permissions on first launch
-                        if let Err(e) = manager.set_consent(true).await {
-                            log::error!("Failed to set initial consent: {}", e);
-                        }
-                        if let Err(e) = manager.request_permission().await {
-                            log::error!("Failed to request initial permission: {}", e);
-                        }
-
-                        // Store the initialized manager
-                        let mut state_lock = notif_state.write().await;
-                        *state_lock = Some(manager);
-                        log::info!("Notification system initialized with default permissions");
-                    }
-                    Err(e) => {
-                        log::error!("Failed to initialize notification manager: {}", e);
-                    }
-                }
-            });
-
-            // Set models directory to use app_data_dir (unified storage location)
-            whisper_engine::commands::set_models_directory(&_app.handle());
-
-            // Initialize Whisper engine on startup
-            tauri::async_runtime::spawn(async {
-                if let Err(e) = whisper_engine::commands::whisper_init().await {
-                    log::error!("Failed to initialize Whisper engine on startup: {}", e);
-                }
-            });
-
-            // Set Parakeet models directory
-            parakeet_engine::commands::set_models_directory(&_app.handle());
-
-            // Initialize Parakeet engine on startup
-            tauri::async_runtime::spawn(async {
-                if let Err(e) = parakeet_engine::commands::parakeet_init().await {
-                    log::error!("Failed to initialize Parakeet engine on startup: {}", e);
-                }
-            });
-
-            // Initialize ModelManager for summary engine (async, non-blocking)
-            let app_handle_for_model_manager = _app.handle().clone();
-            tauri::async_runtime::spawn(async move {
-                match summary::summary_engine::commands::init_model_manager_at_startup(
-                    &app_handle_for_model_manager,
-                )
-                .await
-                {
-                    Ok(_) => log::info!("ModelManager initialized successfully at startup"),
-                    Err(e) => {
-                        log::warn!("Failed to initialize ModelManager at startup: {}", e);
-                        log::warn!("ModelManager will be lazy-initialized on first use");
-                    }
-                }
-            });
-
-            // Trigger system audio permission request on startup (similar to microphone permission)
-            // #[cfg(target_os = "macos")]
-            // {
-            //     tauri::async_runtime::spawn(async {
-            //         if let Err(e) = audio::permissions::trigger_system_audio_permission() {
-            //             log::warn!("Failed to trigger system audio permission: {}", e);
-            //         }
-            //     });
-            // }
-
-            // Initialize database (handles first launch detection and conditional setup)
-            tauri::async_runtime::block_on(async {
-                database::setup::initialize_database_on_startup(&_app.handle()).await
-            })
-            .expect("Failed to initialize database");
-
-            // Initialize bundled templates directory for dynamic template discovery
-            log::info!("Initializing bundled templates directory...");
-            if let Ok(resource_path) = _app.handle().path().resource_dir() {
-                let templates_dir = resource_path.join("templates");
-                log::info!(
-                    "Setting bundled templates directory to: {:?}",
-                    templates_dir
-                );
-                summary::templates::set_bundled_templates_dir(templates_dir);
-            } else {
-                log::warn!("Failed to resolve resource directory for templates");
-            }
-
-            Ok(())
-        })
+    bootstrap::configure_builder(tauri::Builder::default())
+        .setup(bootstrap::setup_app)
         .invoke_handler(tauri::generate_handler![
             start_recording,
             stop_recording,
@@ -708,30 +590,10 @@ pub fn run() {
         ])
         .build(tauri::generate_context!())
         .expect("error while building tauri application")
-        .run(|_app_handle, event| {
+        .run(|app_handle, event| {
             if let tauri::RunEvent::Exit = event {
                 log::info!("Application exiting, cleaning up resources...");
-                tauri::async_runtime::block_on(async {
-                    // Clean up database connection and checkpoint WAL
-                    if let Some(app_state) = _app_handle.try_state::<state::AppState>() {
-                        log::info!("Starting database cleanup...");
-                        if let Err(e) = app_state.db_manager.cleanup().await {
-                            log::error!("Failed to cleanup database: {}", e);
-                        } else {
-                            log::info!("Database cleanup completed successfully");
-                        }
-                    } else {
-                        log::warn!(
-                            "AppState not available for database cleanup (likely first launch)"
-                        );
-                    }
-
-                    // Clean up sidecar
-                    log::info!("Cleaning up sidecar...");
-                    if let Err(e) = summary::summary_engine::force_shutdown_sidecar().await {
-                        log::error!("Failed to force shutdown sidecar: {}", e);
-                    }
-                });
+                tauri::async_runtime::block_on(bootstrap::cleanup_on_exit(app_handle));
                 log::info!("Application cleanup complete");
             }
         });

@@ -9,7 +9,8 @@ This policy describes the behavior of the code in this repository.
 - Meeting recordings, transcripts, summaries, and settings are stored by the desktop app on the local machine.
 - The desktop app initializes its SQLite database in the Tauri app data directory.
 - Local transcription is handled by the native app through Whisper or Parakeet.
-- Provider configuration, including API keys when used, is currently stored locally by the app.
+- Provider configuration is stored locally by the app.
+- Provider API keys are stored in OS-backed credential storage when that facility is available on the platform.
 
 ## Optional External Providers
 

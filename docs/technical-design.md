@@ -124,15 +124,15 @@ If provider breadth creates support burden, hide expert providers behind an adva
 
 ### C. Secure Secret Storage
 
-Provider API keys should move to OS-native credential storage for release builds.
+Provider API keys now use OS-native credential storage for release builds.
 
-At minimum:
+Current behavior:
 
 - Windows Credential Manager
 - macOS Keychain
-- Secret Service or a documented fallback on Linux
+- Secret Service via the platform keyring backend where available
 
-If this is not done for v0.1.0, the product must clearly disclose local secret storage behavior.
+Non-secret provider settings remain in SQLite. Release validation still needs to confirm the keyring behavior on each supported platform.
 
 ### D. Summary Readiness Must Be Truthful
 

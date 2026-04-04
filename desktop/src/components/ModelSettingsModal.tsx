@@ -9,11 +9,14 @@ import { useConfig } from '@/contexts/ConfigContext';
 import {
   Select,
   SelectContent,
+  SelectGroup,
   SelectItem,
+  SelectLabel,
+  SelectSeparator,
   SelectTrigger,
   SelectValue,
 } from '@/components/ui/select';
-import { Alert, AlertDescription } from '@/components/ui/alert';
+import { Alert, AlertDescription, AlertTitle } from '@/components/ui/alert';
 import { ScrollArea } from '@/components/ui/scroll-area';
 import { Lock, Unlock, Eye, EyeOff, RefreshCw, CheckCircle2, XCircle, ChevronDown, ChevronUp, Download, ExternalLink, Check, ChevronsUpDown } from 'lucide-react';
 import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
@@ -27,6 +30,10 @@ import {
 } from '@/components/ui/command';
 import { cn, isOllamaNotInstalledError } from '@/lib/utils';
 import { toast } from 'sonner';
+import {
+  DEFAULT_BUILTIN_SUMMARY_MODEL,
+  DEFAULT_SUMMARY_PROVIDER,
+} from '@/constants/modelDefaults';
 
 export interface ModelConfig {
   provider: 'ollama' | 'groq' | 'claude' | 'openai' | 'openrouter' | 'builtin-ai' | 'custom-openai';
@@ -221,6 +228,9 @@ export function ModelSettingsModal({
     modelConfig.provider === 'groq' ||
     modelConfig.provider === 'openai' ||
     modelConfig.provider === 'openrouter';
+  const isLocalSummaryProvider =
+    modelConfig.provider === 'builtin-ai' || modelConfig.provider === 'ollama';
+  const isExpertProvider = !isLocalSummaryProvider;
 
   // Check if Ollama endpoint has changed but models haven't been fetched yet
   const ollamaEndpointChanged = modelConfig.provider === 'ollama' &&
@@ -683,7 +693,7 @@ export function ModelSettingsModal({
 
   // Function to download recommended model
   const downloadRecommendedModel = async () => {
-    const recommendedModel = 'gemma3:1b';
+    const recommendedModel = DEFAULT_BUILTIN_SUMMARY_MODEL;
 
     // Prevent duplicate downloads (defense in depth - backend also checks)
     if (isDownloading(recommendedModel)) {
@@ -796,7 +806,9 @@ export function ModelSettingsModal({
                 const providerModels = modelOptions[provider];
                 const defaultModel = providerModels && providerModels.length > 0
                   ? providerModels[0]
-                  : '';
+                  : provider === DEFAULT_SUMMARY_PROVIDER
+                    ? DEFAULT_BUILTIN_SUMMARY_MODEL
+                    : '';
                 const model = (savedModel && providerModels?.includes(savedModel))
                   ? savedModel
                   : defaultModel;
@@ -839,13 +851,21 @@ export function ModelSettingsModal({
                 <SelectValue placeholder="Select provider" />
               </SelectTrigger>
               <SelectContent className="max-h-64 overflow-y-auto">
-                <SelectItem value="builtin-ai">Built-in AI (Offline, No API needed)</SelectItem>
-                <SelectItem value="claude">Claude</SelectItem>
-                <SelectItem value="custom-openai">Custom Server (OpenAI)</SelectItem>
-                <SelectItem value="groq">Groq</SelectItem>
-                <SelectItem value="ollama">Ollama</SelectItem>
-                <SelectItem value="openai">OpenAI</SelectItem>
-                <SelectItem value="openrouter">OpenRouter</SelectItem>
+                <SelectGroup>
+                  <SelectLabel>Local First</SelectLabel>
+                  <SelectItem value="builtin-ai">Built-in AI (Default, offline)</SelectItem>
+                  <SelectItem value="ollama">Ollama (Advanced local)</SelectItem>
+                </SelectGroup>
+
+                <SelectSeparator />
+                <SelectGroup>
+                  <SelectLabel>External Providers</SelectLabel>
+                  <SelectItem value="claude">Claude</SelectItem>
+                  <SelectItem value="custom-openai">Custom Server (OpenAI-compatible)</SelectItem>
+                  <SelectItem value="groq">Groq</SelectItem>
+                  <SelectItem value="openai">OpenAI</SelectItem>
+                  <SelectItem value="openrouter">OpenRouter</SelectItem>
+                </SelectGroup>
               </SelectContent>
             </Select>
 
@@ -908,6 +928,27 @@ export function ModelSettingsModal({
             )}
           </div>
         </div>
+
+        <Alert
+          className={cn(
+            isLocalSummaryProvider ? 'border-green-200 bg-green-50' : 'border-amber-200 bg-amber-50'
+          )}
+        >
+          <AlertTitle>
+            {isLocalSummaryProvider ? 'Local summary path' : 'External summary path'}
+          </AlertTitle>
+          <AlertDescription>
+            {modelConfig.provider === 'builtin-ai' && (
+              <p>Built-in AI is the default `v0.1.0` path. Summaries stay on this machine once the local model is downloaded.</p>
+            )}
+            {modelConfig.provider === 'ollama' && (
+              <p>Ollama keeps summary generation local, but assumes a working local Ollama runtime and model inventory.</p>
+            )}
+            {isExpertProvider && (
+              <p>Transcript text leaves the machine for summary generation when you use this provider. API keys are stored in the OS credential manager, not in the app database.</p>
+            )}
+          </AlertDescription>
+        </Alert>
 
         {/* Custom OpenAI Configuration Section */}
         {modelConfig.provider === 'custom-openai' && (

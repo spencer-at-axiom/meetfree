@@ -22,6 +22,7 @@ The current codebase includes:
 - Recording, transcription, and meeting storage run locally inside the desktop app.
 - Summary generation can stay local when you use Ollama or BuiltInAI.
 - Summary generation sends data to an external provider only when you configure and select one.
+- Provider API keys are stored in the operating system credential store when available.
 - Analytics are optional and default to off.
 
 ## Not In This Repo

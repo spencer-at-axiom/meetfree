@@ -119,6 +119,7 @@ dashmap = "6.1.0"
 
 # Directories
 dirs = "5.0.1"
+keyring = "3.6.2"
 
 # Additional dependencies for notification system
 url = "2.5.0"

@@ -3,12 +3,16 @@ import { ModelConfig } from '@/components/ModelSettingsModal';
 import { invoke as invokeTauri } from '@tauri-apps/api/core';
 import { toast } from 'sonner';
 import Analytics from '@/lib/analytics';
+import {
+  DEFAULT_BUILTIN_SUMMARY_MODEL,
+  DEFAULT_SUMMARY_PROVIDER,
+} from '@/constants/modelDefaults';
 
 export function useModelConfiguration() {
-  // Note: No hardcoded defaults - DB is the source of truth
+  // The database remains the source of truth; these defaults only cover the initial loading window.
   const [modelConfig, setModelConfig] = useState<ModelConfig>({
-    provider: 'ollama',
-    model: '', // Empty until loaded from DB
+    provider: DEFAULT_SUMMARY_PROVIDER,
+    model: DEFAULT_BUILTIN_SUMMARY_MODEL,
     whisperModel: 'large-v3'
   });
   const [isLoading, setIsLoading] = useState(true);

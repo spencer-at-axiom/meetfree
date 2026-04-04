@@ -9,7 +9,7 @@
 use serde::{Deserialize, Serialize};
 
 /// Custom OpenAI-compatible endpoint configuration
-/// Stored as JSON in the database and used for connecting to any OpenAI-compatible API server
+/// Non-secret settings are stored in SQLite, while the API key is stored in OS-backed secure credential storage.
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct CustomOpenAIConfig {
     /// Base URL of the OpenAI-compatible API endpoint (e.g., "http://localhost:8000/v1")
