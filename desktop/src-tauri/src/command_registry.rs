@@ -119,18 +119,8 @@ macro_rules! app_invoke_handler {
             api::meetings::transcript_save,
             api::meetings::meeting_folder_open,
             api::meetings::external_url_open,
-            api::api_get_meetings,
-            api::api_search_transcripts,
-            api::api_delete_meeting,
-            api::api_get_meeting,
-            api::api_get_meeting_metadata,
-            api::api_get_meeting_transcripts,
-            api::api_save_meeting_title,
-            api::api_save_transcript,
-            api::open_meeting_folder,
-            api::open_external_url,
 
-            // Settings and config API commands
+            // Settings and config API commands exposed to the frontend
             api::config::model_cfg_get,
             api::config::model_cfg_set,
             api::config::model_api_key_get,
@@ -141,15 +131,6 @@ macro_rules! app_invoke_handler {
             api::custom_openai::custom_openai_cfg_set,
             api::custom_openai::custom_openai_cfg_get,
             api::custom_openai::custom_openai_conn_test,
-            api::api_get_model_config,
-            api::api_save_model_config,
-            api::api_get_api_key,
-            api::api_get_transcript_config,
-            api::api_save_transcript_config,
-            api::api_get_transcript_api_key,
-            api::api_save_custom_openai_config,
-            api::api_get_custom_openai_config,
-            api::api_test_custom_openai_connection,
 
             // Summary and template commands
             summary::api_process_transcript,
