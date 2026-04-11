@@ -18,6 +18,7 @@ interface TabPrp {
   onExp: (format: ExportFormat) => Promise<void>;
   aiSum: SummaryPayload | null;
   sumSt: SumSt;
+  streamProgress?: number;
   rows: any[];
   cfg: ModelConfig;
   setCfg: (config: ModelConfig | ((prev: ModelConfig) => ModelConfig)) => void;
@@ -39,16 +40,33 @@ interface TabPrp {
 export function SumTab(props: TabPrp) {
   const { sumSt, aiSum, rows, sumErr } = props;
 
-  const isGen = sumSt === 'processing' || sumSt === 'summarizing' || sumSt === 'regenerating';
+  const isGen = sumSt === 'processing' || sumSt === 'summarizing' || sumSt === 'regenerating' || sumSt === 'streaming';
   const hasSum = !!aiSum;
   const hasTxt = rows && rows.length > 0;
   const hasErr = sumSt === 'error' || !!sumErr;
 
   if (isGen) {
+    const progress = props.streamProgress;
+    const showBar = sumSt === 'streaming' && progress != null;
     return (
       <div className="flex h-full items-center justify-center bg-slate-50/60 px-6">
-        <div className="space-y-4 rounded-3xl border border-slate-200 bg-white/90 px-8 py-10 text-center shadow-sm">
-          <div className="mx-auto inline-block h-12 w-12 animate-spin rounded-full border-2 border-slate-200 border-t-slate-700"></div>
+        <div className="w-full max-w-sm space-y-4 rounded-3xl border border-slate-200 bg-white/90 px-8 py-10 text-center shadow-sm">
+          {!showBar && (
+            <div className="mx-auto inline-block h-12 w-12 animate-spin rounded-full border-2 border-slate-200 border-t-slate-700"></div>
+          )}
+          {showBar && (
+            <div className="mx-auto w-full">
+              <div className="h-2 w-full overflow-hidden rounded-full bg-slate-200">
+                <div
+                  className="h-full rounded-full bg-slate-700 transition-all duration-300 ease-out"
+                  style={{ width: `${Math.round((progress ?? 0) * 100)}%` }}
+                />
+              </div>
+              <p className="mt-2 text-xs tabular-nums text-slate-500">
+                {Math.round((progress ?? 0) * 100)}%
+              </p>
+            </div>
+          )}
           <div className="space-y-2">
             <p className="text-lg font-medium text-slate-950">Generating Summary</p>
             <p className="text-sm text-slate-600">{props.getMsg(sumSt)}</p>

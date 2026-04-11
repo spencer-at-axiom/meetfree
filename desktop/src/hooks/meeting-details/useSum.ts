@@ -1,13 +1,14 @@
-import { useCallback, useState } from 'react';
+import { useCallback, useRef, useState } from 'react';
 import { useMeetings } from '@/contexts/MeetingsContext';
 import type { ModelConfig } from '@/components/ModelSettingsModal';
 import type { SummaryPayload } from '@/contracts/summaryContract';
 import type { MeetingDetails } from '@/types/meeting';
 import { showErr, showLoad, showNeedMdl, showOll0, showOllErr, showOllMiss, showRun, showStop, showTxtErr, showNoTxt, msg, type SumSt } from './sumMsg';
-import { chkOll, fetch, fmtTxt, haltReq, kick } from './sumSvc';
+import { chkOll, fetch, fmtTxt, haltReq, kick, load } from './sumSvc';
 import { makePol } from './sumPol';
 import { invoke as invokeTauri } from '@tauri-apps/api/core';
 import Analytics from '@/lib/analytics';
+import { startStreamingSummary } from '@/services/summaryStreamingService';
 
 interface SumOpt {
   meeting: MeetingDetails;
@@ -23,6 +24,8 @@ interface SumOpt {
 export interface SumApi {
   sumSt: SumSt;
   sumErr: string | null;
+  streamProgress: number | undefined;
+  streamMsg: string | undefined;
   gen: (prompt?: string) => Promise<void>;
   regen: () => Promise<void>;
   halt: () => Promise<void>;
@@ -42,6 +45,9 @@ export function useSum({
   const [sumSt, setSt] = useState<SumSt>('idle');
   const [sumErr, setErr] = useState<string | null>(null);
   const [orig, setOrig] = useState('');
+  const [streamProgress, setStreamProgress] = useState<number | undefined>(undefined);
+  const [streamMsg, setStreamMsg] = useState<string | undefined>(undefined);
+  const streamCleanupRef = useRef<(() => void) | null>(null);
   const { startSummaryPolling, stopSummaryPolling } = useMeetings();
 
   const proc = useCallback(async ({
@@ -122,6 +128,59 @@ export function useSum({
     updateMeetingTitle,
   ]);
 
+  const genStream = useCallback(async (isRe: boolean = false) => {
+    setSt('streaming');
+    setErr(null);
+    setStreamProgress(0);
+    setStreamMsg('Initializing...');
+
+    try {
+      showRun(isRe, modelConfig);
+
+      const { unlisten } = await startStreamingSummary(
+        meeting.id,
+        selectedTemplate,
+        {
+          onProgress: (p) => {
+            setStreamProgress(p.progress);
+            setStreamMsg(p.message);
+          },
+          onChunk: () => {},
+          onError: (e) => {
+            setErr(e.error);
+            setSt('error');
+            setStreamProgress(undefined);
+            setStreamMsg(undefined);
+            showErr(isRe, e.error);
+          },
+          onComplete: async () => {
+            setStreamProgress(undefined);
+            setStreamMsg(undefined);
+            try {
+              const summary = await load(meeting.id);
+              if (summary) {
+                setAiSummary(summary);
+              }
+              setSt('completed');
+              await onMeetingUpdated?.();
+            } catch {
+              setSt('completed');
+            }
+          },
+        },
+      );
+
+      streamCleanupRef.current = unlisten;
+    } catch (err) {
+      const errMsg = err instanceof Error ? err.message : 'Unknown error';
+      setErr(errMsg);
+      setSt('error');
+      setStreamProgress(undefined);
+      setStreamMsg(undefined);
+      showErr(isRe, errMsg);
+    }
+  }, [meeting.id, modelConfig, selectedTemplate, setAiSummary, onMeetingUpdated]);
+
   const gen = useCallback(async (prompt: string = '') => {
     if (isModelConfigLoading) {
       console.log('Model configuration is still loading, please wait...');
@@ -176,11 +235,15 @@ export function useSum({
       }
     }
 
-    await proc({
-      txt: fmtTxt(rows),
-      prompt,
-    });
-  }, [isModelConfigLoading, meeting.id, modelConfig, onOpenModelSettings, proc, selectedTemplate]);
+    if (!prompt.trim()) {
+      await genStream(false);
+    } else {
+      await proc({
+        txt: fmtTxt(rows),
+        prompt,
+      });
+    }
+  }, [isModelConfigLoading, meeting.id, modelConfig, onOpenModelSettings, proc, selectedTemplate, genStream]);
 
   const regen = useCallback(async () => {
     if (!orig.trim()) {
@@ -197,6 +260,11 @@ export function useSum({
   const halt = useCallback(async () => {
     console.log('Stopping summary generation for meeting:', meeting.id);
 
+    if (streamCleanupRef.current) {
+      streamCleanupRef.current();
+      streamCleanupRef.current = null;
+    }
+
     try {
       await haltReq(meeting.id);
       console.log('Backend cancellation request sent for meeting:', meeting.id);
@@ -207,15 +275,19 @@ export function useSum({
     stopSummaryPolling(meeting.id);
     setSt('idle');
     setErr(null);
+    setStreamProgress(undefined);
+    setStreamMsg(undefined);
     showStop();
   }, [meeting.id, stopSummaryPolling]);
 
   return {
     sumSt,
     sumErr,
+    streamProgress,
+    streamMsg,
     gen,
     regen,
     halt,
-    msg,
+    msg: (st: SumSt) => msg(st, streamMsg),
   };
 }

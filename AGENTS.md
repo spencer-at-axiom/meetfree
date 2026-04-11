@@ -4,7 +4,7 @@ This repository's product of record is the native Tauri desktop application in [
 
 ## Release Status
 
-**v0.3.0 Complete** — All planned features implemented, including PDF/DOCX export and speaker diarization.
+**v0.4.0 Complete** — Structured meeting intelligence, speaker identities, review workflows, and manual voice-profile management on top of the v0.3.0 foundation (PDF/DOCX export, speaker diarization).
 
 ## Stack
 
@@ -25,6 +25,8 @@ This repository's product of record is the native Tauri desktop application in [
 - Audio capture and transcription pipeline in [`desktop/src-tauri/src/audio/`](desktop/src-tauri/src/audio/)
 - Summary templates in [`desktop/src-tauri/src/summary/`](desktop/src-tauri/src/summary/)
 - Export infrastructure in [`desktop/src-tauri/src/export/`](desktop/src-tauri/src/export/)
+- Speaker identity and structured review in [`desktop/src-tauri/src/database/repositories/`](desktop/src-tauri/src/database/repositories/)
+- Diarization pipeline in [`desktop/src-tauri/src/diarization/`](desktop/src-tauri/src/diarization/)
 
 See [docs/DATA_MODEL.md](docs/DATA_MODEL.md) for the database schema and content model.
 
@@ -35,7 +37,7 @@ See [docs/DATA_MODEL.md](docs/DATA_MODEL.md) for the database schema and content
 
 ## Implementation Status
 
-### Fully Implemented (v0.3.0)
+### Fully Implemented (v0.4.0)
 - Desktop UI with Next.js 16 and React 18
 - Audio recording (microphone) on all platforms
 - Local transcription with Whisper and Parakeet models
@@ -43,9 +45,9 @@ See [docs/DATA_MODEL.md](docs/DATA_MODEL.md) for the database schema and content
 - Meeting management (CRUD operations) with durable finalization
 - SQLite FTS5 search with BM25 ranking, date/source/summary filters
 - Markdown export (single and batch) with YAML frontmatter
-- **PDF export (single and batch) with professional formatting**
-- **DOCX export (single and batch) with Open XML compliance**
-- **Speaker diarization via sherpa-onnx integration** (native Rust, no external dependencies)
+- PDF export (single and batch) with professional formatting
+- DOCX export (single and batch) with Open XML compliance
+- Speaker diarization via sherpa-onnx integration (native Rust, no external dependencies)
 - Summary generation with multiple providers (Ollama, OpenAI, Claude, Groq, OpenRouter, custom endpoints)
 - Template system for summaries
 - Vocabulary rules (global and meeting-scoped) with live preview
@@ -55,6 +57,12 @@ See [docs/DATA_MODEL.md](docs/DATA_MODEL.md) for the database schema and content
 - Notification system (core functionality)
 - Database migrations and schema management
 - Transcript cleanup and vocabulary corrections across display, export, and summary
+- **Reusable speaker identities** with create, link, unlink, rename, inspect, and merge workflows
+- **Manual voice profiles** with provider/model metadata and CRUD
+- **Structured action items and decisions** as first-class database entities with transcript-backed provenance
+- **Review UI** for meeting speakers, action items, and decisions with accept/reject/needs-review states
+- **Structured export assembly** preferring canonical action-item and decision rows
+- **Decision-to-action-item relationship linking**
 
 ### Platform-Specific Limitations
 - System audio capture availability depends on platform audio stack exposure:
@@ -65,13 +73,16 @@ See [docs/DATA_MODEL.md](docs/DATA_MODEL.md) for the database schema and content
 ### Not Yet Implemented (Future Releases)
 - Team/collaborative workspaces (out of scope for single-user release)
 - Cloud sync (not in product vision)
-- Cross-meeting speaker identification (planned for v0.4+)
-- Speaker voice profiles (planned for v0.4+)
-- Action item extraction (planned for v0.4+)
+- Cross-meeting speaker identification via acoustic matching (planned for v0.5+)
+- Voice profile training and automatic speaker matching (planned for v0.5+)
+- Context ingestion: scratchpad, attachments, calendar enrichment (planned for v0.5)
+- Meeting memory and cross-meeting retrieval (planned for v0.6)
+- Live meeting copilot (planned for v0.7+)
+- Streaming summary generation (backend implemented, frontend wiring pending)
 
 ### Test Coverage
 - Backend: Comprehensive unit tests across all core modules (audio, transcription, export, database, summary, diarization)
-- Frontend: Hook/service coverage for recording session control, keyboard stop/start behavior, summary generation workflow, IndexedDB, and updater services
+- Frontend: Hook/service coverage for recording session control, keyboard stop/start behavior, summary generation workflow, IndexedDB, updater services, speaker identity UI, and structured review panel
 
 ### Known Issues
 - System audio capture on Windows/Linux depends on environment-specific loopback/monitor devices being exposed by the active driver/stack

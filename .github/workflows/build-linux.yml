@@ -186,18 +186,6 @@ jobs:
           cd desktop
           pnpm install
 
-      - name: Build meetfree-llm-service sidecar
-        run: |
-          echo "Building meetfree-llm-service sidecar (CPU mode)..."
-          cargo build --release -p meetfree-llm-service
-          
-          # Copy binary to binaries directory
-          mkdir -p desktop/src-tauri/binaries
-          cp target/release/meetfree-llm-service desktop/src-tauri/binaries/meetfree-llm-service-x86_64-unknown-linux-gnu
-          
-          echo "Copied meetfree-llm-service to desktop/src-tauri/binaries/"
-          ls -la desktop/src-tauri/binaries/
-
       - name: Build Tauri app
         uses: tauri-apps/tauri-action@v0
         env:

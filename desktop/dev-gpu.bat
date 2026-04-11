@@ -126,65 +126,6 @@ if defined TAURI_GPU_FEATURE (
     echo Ã¢Å¡Â Ã¯Â¸Â No specific GPU feature detected or forced
 )
 
-REM Build meetfree-llm-service
-echo.
-echo Ã°Å¸Â¦â„¢ Building meetfree-llm-service sidecar (debug)...
-
-set "SERVICE_DIR=..\meetfree-llm-service"
-if not exist "%SERVICE_DIR%" (
-    echo Ã¢ÂÅ’ Could not find meetfree-llm-service directory at %SERVICE_DIR%
-    exit /b 1
-)
-
-set "SERVICE_FEATURES="
-if defined TAURI_GPU_FEATURE (
-    set "SERVICE_FEATURES=--features !TAURI_GPU_FEATURE!"
-)
-
-echo    Building in %SERVICE_DIR% with features: %SERVICE_FEATURES%
-pushd "%SERVICE_DIR%"
-call cargo build %SERVICE_FEATURES%
-if errorlevel 1 (
-    echo Ã¢ÂÅ’ Failed to build meetfree-llm-service
-    popd
-    exit /b 1
-)
-popd
-echo Ã¢Å“â€¦ meetfree-llm-service built successfully
-
-REM Detect target triple
-echo.
-echo Ã°Å¸Å½Â¯ Detecting target triple...
-for /f "tokens=2" %%i in ('rustc -vV ^| findstr "host:"') do set TARGET_TRIPLE=%%i
-echo    Target: !TARGET_TRIPLE!
-
-REM Copy binary
-set "BINARIES_DIR=src-tauri\binaries"
-if not exist "%BINARIES_DIR%" mkdir "%BINARIES_DIR%"
-
-REM Clean old binaries
-del /q "%BINARIES_DIR%\meetfree-llm-service*" 2>nul
-
-set "BASE_BINARY=meetfree-llm-service.exe"
-set "SIDECAR_BINARY=meetfree-llm-service-!TARGET_TRIPLE!.exe"
-set "SRC_PATH=..\target\debug\%BASE_BINARY%"
-set "DEST_PATH=%BINARIES_DIR%\%SIDECAR_BINARY%"
-
-if not exist "%SRC_PATH%" (
-    REM Fallback check
-    set "SRC_PATH=target\debug\%BASE_BINARY%"
-)
-
-if exist "%SRC_PATH%" (
-    copy /Y "%SRC_PATH%" "%DEST_PATH%" >nul
-    echo Ã¢Å“â€¦ Copied binary to %DEST_PATH%
-) else (
-    echo Ã¢ÂÅ’ Binary not found at %SRC_PATH%
-    echo Ã¢Å¡Â Ã¯Â¸Â Contents of ..\target\debug:
-    dir "..\target\debug"
-    exit /b 1
-)
-
 REM Run tauri dev
 echo.
 echo Ã°Å¸â€œÂ¦ Starting complete Tauri application...

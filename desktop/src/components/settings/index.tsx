@@ -731,7 +731,101 @@ export function FilesAndStorageSettings() {
           ))}
         </SettingsCard>
       </SettingsSection>
+
+      <DatabaseBackupSection />
     </div>
+  );
+}
+
+function DatabaseBackupSection() {
+  const [isCreating, setIsCreating] = useState(false);
+  const [backups, setBackups] = useState<string[]>([]);
+  const [isLoadingBackups, setIsLoadingBackups] = useState(false);
+
+  const loadBackups = async () => {
+    setIsLoadingBackups(true);
+    try {
+      const list = await invoke<string[]>('list_database_backups');
+      setBackups(list);
+    } catch {
+      console.error('Failed to list backups');
+    } finally {
+      setIsLoadingBackups(false);
+    }
+  };
+
+  useEffect(() => {
+    void loadBackups();
+  }, []);
+
+  const handleCreateBackup = async () => {
+    setIsCreating(true);
+    try {
+      const path = await invoke<string>('create_database_backup');
+      toast.success('Database backup created', {
+        description: path.split(/[/\\]/).pop(),
+        duration: 4000,
+      });
+      await loadBackups();
+    } catch (error) {
+      console.error('Failed to create backup:', error);
+      toast.error('Failed to create backup');
+    } finally {
+      setIsCreating(false);
+    }
+  };
+
+  const handleCleanup = async () => {
+    try {
+      const removed = await invoke<number>('cleanup_old_backups', { keepCount: 3 });
+      if (removed > 0) {
+        toast.success(`Cleaned up ${removed} old backup${removed > 1 ? 's' : ''}`);
+        await loadBackups();
+      } else {
+        toast.info('No old backups to clean up');
+      }
+    } catch (error) {
+      console.error('Failed to cleanup backups:', error);
+      toast.error('Failed to cleanup old backups');
+    }
+  };
+
+  return (
+    <SettingsSection title="Database Backup">
+      <SettingsCard>
+        <div className="space-y-3">
+          <div className="text-[13px] text-slate-600">
+            Create a snapshot of your meeting database. Backups are stored alongside your database file.
+          </div>
+          <div className="flex items-center gap-2">
+            <Button
+              type="button"
+              variant="outline"
+              onClick={() => void handleCreateBackup()}
+              disabled={isCreating}
+              className={`${SETTINGS_OUTLINE_BUTTON_CLASS}`}
+            >
+              {isCreating ? 'Creating...' : 'Create Backup'}
+            </Button>
+            {backups.length > 3 && (
+              <Button
+                type="button"
+                variant="outline"
+                onClick={() => void handleCleanup()}
+                className={`${SETTINGS_OUTLINE_BUTTON_CLASS}`}
+              >
+                Cleanup Old
+              </Button>
+            )}
+          </div>
+          {!isLoadingBackups && backups.length > 0 && (
+            <div className="text-[11px] text-slate-400">
+              {backups.length} backup{backups.length !== 1 ? 's' : ''} saved
+            </div>
+          )}
+        </div>
+      </SettingsCard>
+    </SettingsSection>
   );
 }
 

@@ -12,7 +12,7 @@ interface PolOpt {
   onUp?: () => Promise<void>;
   setTtl: (ttl: string) => void;
   setSum: (sum: SummaryPayload | null) => void;
-  setSt: (st: 'idle' | 'processing' | 'summarizing' | 'regenerating' | 'completed' | 'error') => void;
+  setSt: (st: 'idle' | 'processing' | 'summarizing' | 'regenerating' | 'streaming' | 'completed' | 'error') => void;
   setErr: (err: string | null) => void;
   onOpen?: () => void;
 }

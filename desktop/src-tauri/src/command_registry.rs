@@ -2,23 +2,17 @@ macro_rules! app_invoke_handler {
     () => {
         tauri::generate_handler![
             // Core app commands
-            start_recording,
-            stop_recording,
             stop_and_finalize_recording,
             is_recording,
             get_transcription_status,
             read_audio_file,
             get_audio_devices,
             trigger_microphone_permission,
-            start_recording_with_devices,
             start_recording_with_devices_and_meeting,
             start_audio_level_monitoring,
             stop_audio_level_monitoring,
             is_audio_level_monitoring,
             set_language_preference,
-            console_utils::show_console,
-            console_utils::hide_console,
-            console_utils::toggle_console,
             // Whisper commands
             whisper_engine::commands::whisper_init,
             whisper_engine::commands::whisper_get_available_models,
@@ -33,17 +27,6 @@ macro_rules! app_invoke_handler {
             whisper_engine::commands::whisper_cancel_download,
             whisper_engine::commands::whisper_delete_corrupted_model,
             whisper_engine::commands::open_models_folder,
-            whisper_engine::parallel_commands::initialize_parallel_processor,
-            whisper_engine::parallel_commands::start_parallel_processing,
-            whisper_engine::parallel_commands::pause_parallel_processing,
-            whisper_engine::parallel_commands::resume_parallel_processing,
-            whisper_engine::parallel_commands::stop_parallel_processing,
-            whisper_engine::parallel_commands::get_parallel_processing_status,
-            whisper_engine::parallel_commands::get_system_resources,
-            whisper_engine::parallel_commands::check_resource_constraints,
-            whisper_engine::parallel_commands::calculate_optimal_workers,
-            whisper_engine::parallel_commands::prepare_audio_chunks,
-            whisper_engine::parallel_commands::test_parallel_processing_setup,
             // Parakeet commands
             parakeet_engine::commands::parakeet_init,
             parakeet_engine::commands::parakeet_get_available_models,
@@ -84,13 +67,7 @@ macro_rules! app_invoke_handler {
             audio::recording_preferences::get_current_audio_backend,
             audio::recording_preferences::set_audio_backend,
             audio::recording_preferences::get_audio_backend_info,
-            // System audio and permissions commands
-            audio::system_audio_commands::start_system_audio_capture_command,
-            audio::system_audio_commands::list_system_audio_devices_command,
-            audio::system_audio_commands::check_system_audio_permissions_command,
-            audio::system_audio_commands::start_system_audio_monitoring,
-            audio::system_audio_commands::stop_system_audio_monitoring,
-            audio::system_audio_commands::get_system_audio_monitoring_status,
+            // Permissions commands
             audio::permissions::check_screen_recording_permission_command,
             audio::permissions::request_screen_recording_permission_command,
             audio::permissions::trigger_system_audio_permission_command,
@@ -116,12 +93,11 @@ macro_rules! app_invoke_handler {
             api::meetings::open_path,
             export::markdown::meeting_export_markdown,
             export::markdown::meetings_export_markdown_batch,
-            // v0.3.0: PDF and DOCX export commands
             export::pdf::meeting_export_pdf,
             export::pdf::meetings_export_pdf_batch,
             export::docx::meeting_export_docx,
             export::docx::meetings_export_docx_batch,
-            // v0.3.0: Speaker diarization commands
+            // Speaker diarization commands
             diarization::start_diarization,
             diarization::get_diarization_models,
             diarization::download_diarization_models,
@@ -130,7 +106,7 @@ macro_rules! app_invoke_handler {
             vocabulary::vocabulary_upsert,
             vocabulary::vocabulary_delete,
             vocabulary::transcript_postprocess_preview,
-            // Settings and config API commands exposed to the frontend
+            // Settings and config API commands
             api::config::model_cfg_get,
             api::config::model_cfg_set,
             api::config::transcript_cfg_get,
@@ -149,21 +125,11 @@ macro_rules! app_invoke_handler {
             summary::api_list_templates,
             summary::api_get_template_details,
             summary::api_validate_template,
-            // Notifications commands
+            summary::generate_summary_streaming,
+            // Notifications commands (only frontend-used subset)
             notifications::commands::get_notification_settings,
             notifications::commands::set_notification_settings,
             notifications::commands::request_notification_permission,
-            notifications::commands::show_notification,
-            notifications::commands::show_test_notification,
-            notifications::commands::is_dnd_active,
-            notifications::commands::get_system_dnd_status,
-            notifications::commands::set_manual_dnd,
-            notifications::commands::set_notification_consent,
-            notifications::commands::clear_notifications,
-            notifications::commands::is_notification_system_ready,
-            notifications::commands::initialize_notification_manager_manual,
-            notifications::commands::test_notification_with_auto_consent,
-            notifications::commands::get_notification_stats,
             // Database and onboarding commands
             database::commands::check_first_launch,
             database::commands::initialize_fresh_database,
@@ -196,6 +162,10 @@ macro_rules! app_invoke_handler {
             audio::import::start_import_audio_command,
             audio::import::cancel_import_command,
             audio::import::is_import_in_progress_command,
+            // Database backup commands
+            database::backup::create_database_backup,
+            database::backup::list_database_backups,
+            database::backup::cleanup_old_backups,
             // Platform-specific commands
             #[cfg(target_os = "macos")]
             utils::open_system_settings

@@ -135,18 +135,6 @@ jobs:
           echo "Ã¢Å“â€œ macOS build will use Metal GPU acceleration (enabled by default)"
           echo "Ã¢Å“â€œ CoreML acceleration available for Apple Silicon"
 
-      - name: Build meetfree-llm-service sidecar
-        run: |
-          echo "Building meetfree-llm-service sidecar with Metal support..."
-          cargo build --release -p meetfree-llm-service --features metal
-
-          # Copy binary to binaries directory
-          mkdir -p desktop/src-tauri/binaries
-          cp target/release/meetfree-llm-service desktop/src-tauri/binaries/meetfree-llm-service-aarch64-apple-darwin
-
-          echo "Copied meetfree-llm-service to desktop/src-tauri/binaries/"
-          ls -la desktop/src-tauri/binaries/
-
       - name: Cache FFmpeg binary
         uses: actions/cache@v4
         with:

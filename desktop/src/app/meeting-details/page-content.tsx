@@ -134,6 +134,7 @@ export default function PageContent({
     halt,
     sumSt,
     sumErr,
+    streamProgress,
     msg,
   } = useSum({
     meeting,
@@ -315,6 +316,7 @@ export default function PageContent({
               onExp={meetingOperations.handleExport}
               aiSum={meetingData.aiSummary}
               sumSt={sumSt}
+              streamProgress={streamProgress}
               rows={meetingData.transcripts}
               cfg={modelConfig}
               setCfg={setModelConfig}

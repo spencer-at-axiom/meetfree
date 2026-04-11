@@ -96,6 +96,7 @@ export default function MeetingsPage() {
   const [selectedMeetings, setSelectedMeetings] = useState<Set<string>>(new Set());
   const [isSelectionMode, setIsSelectionMode] = useState(false);
   const [focusedIndex, setFocusedIndex] = useState(-1);
+  const [ftsMatchIds, setFtsMatchIds] = useState<Set<string> | null>(null);
 
   const [isBatchExportOpen, setIsBatchExportOpen] = useState(false);
   const [batchDestinationRoot, setBatchDestinationRoot] = useState('');
@@ -108,6 +109,31 @@ export default function MeetingsPage() {
     () => meetings.filter((meeting): meeting is MeetingListItem => meeting.id !== 'intro-call'),
     [meetings]
   );
+
+  useEffect(() => {
+    const query = searchQuery.trim();
+    if (query.length < 2) {
+      setFtsMatchIds(null);
+      return;
+    }
+
+    let cancelled = false;
+    const timer = setTimeout(async () => {
+      try {
+        const res = await invoke<{ results: Array<{ id: string }> }>(
+          'transcript_search_with_filters',
+          { query, limit: 200, offset: 0 }
+        );
+        if (!cancelled) {
+          setFtsMatchIds(new Set(res.results.map((r) => r.id)));
+        }
+      } catch {
+        if (!cancelled) setFtsMatchIds(null);
+      }
+    }, 250);
+
+    return () => { cancelled = true; clearTimeout(timer); };
+  }, [searchQuery]);
 
   useEffect(() => {
     if (searchParams.get('action') !== 'batch-export') {
@@ -163,7 +189,9 @@ export default function MeetingsPage() {
       .map(([group, groupMeetings]) => [
         group,
         groupMeetings.filter((meeting) => {
-          const matchesQuery = !query || meeting.title.toLowerCase().includes(query);
+          const titleMatch = !query || meeting.title.toLowerCase().includes(query);
+          const ftsMatch = ftsMatchIds !== null ? ftsMatchIds.has(meeting.id) : false;
+          const matchesQuery = !query || titleMatch || ftsMatch;
           const matchesFilter =
             meetingFilter === 'all'
               ? true
@@ -186,7 +214,7 @@ export default function MeetingsPage() {
         }),
       ] as MeetingGroup)
       .filter((entry) => entry[1].length > 0);
-  }, [groupedMeetings, searchQuery, meetingFilter, meetingDateFilter]);
+  }, [groupedMeetings, searchQuery, meetingFilter, meetingDateFilter, ftsMatchIds]);
 
   const flatMeetings = useMemo(
     () => filteredMeetings.flatMap(([_, groupMeetings]) => groupMeetings),

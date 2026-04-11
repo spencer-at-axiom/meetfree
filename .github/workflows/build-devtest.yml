@@ -336,39 +336,6 @@ jobs:
 
           echo "features=$FEATURES" >> "$GITHUB_OUTPUT"
 
-      - name: Build meetfree-llm-service sidecar
-        shell: bash
-        run: |
-          echo "Building meetfree-llm-service sidecar..."
-
-          # Determine meetfree-llm-service features based on platform
-          LLAMA_FEATURES=""
-          if [[ "${{ matrix.platform }}" == *"macos"* ]]; then
-            LLAMA_FEATURES="--features metal"
-            echo "Using Metal GPU acceleration for macOS"
-          elif [[ "${{ matrix.platform }}" == *"windows"* ]]; then
-            LLAMA_FEATURES="--features vulkan"
-            echo "Using Vulkan GPU acceleration for Windows"
-          else
-            echo "Using CPU-only mode for Linux"
-          fi
-
-          # Build meetfree-llm-service from workspace root
-          cargo build --release -p meetfree-llm-service $LLAMA_FEATURES
-
-          # Determine binary extension
-          EXT=""
-          if [[ "${{ matrix.platform }}" == *"windows"* ]]; then
-            EXT=".exe"
-          fi
-
-          # Copy binary to binaries directory
-          mkdir -p desktop/src-tauri/binaries
-          cp target/release/meetfree-llm-service${EXT} desktop/src-tauri/binaries/meetfree-llm-service-${{ matrix.target }}${EXT}
-
-          echo "Copied meetfree-llm-service to desktop/src-tauri/binaries/meetfree-llm-service-${{ matrix.target }}${EXT}"
-          ls -la desktop/src-tauri/binaries/
-
       # Build step (with code signing)
       - name: Build Tauri app (with code signing)
         if: github.event.inputs.sign-build == 'true'

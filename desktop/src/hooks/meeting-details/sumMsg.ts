@@ -1,9 +1,9 @@
 import { toast } from 'sonner';
 import type { ModelConfig } from '@/components/ModelSettingsModal';
 
-export type SumSt = 'idle' | 'processing' | 'summarizing' | 'regenerating' | 'completed' | 'error';
+export type SumSt = 'idle' | 'processing' | 'summarizing' | 'regenerating' | 'streaming' | 'completed' | 'error';
 
-export function msg(st: SumSt): string {
+export function msg(st: SumSt, streamMsg?: string): string {
   switch (st) {
     case 'processing':
       return 'Processing transcript...';
@@ -11,6 +11,8 @@ export function msg(st: SumSt): string {
       return 'Generating summary...';
     case 'regenerating':
       return 'Regenerating summary...';
+    case 'streaming':
+      return streamMsg || 'Generating summary...';
     case 'completed':
       return 'Summary completed';
     case 'error':
