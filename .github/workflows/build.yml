@@ -53,7 +53,7 @@ jobs:
       - name: Checkout repository
         uses: actions/checkout@v4
         with:
-          repository: ${{ inputs.repository }}
+          repository: ${{ inputs.repository || github.repository }}
           ref: ${{ inputs.ref }}
           fetch-depth: 0
 
@@ -113,17 +113,13 @@ jobs:
           workspaces: ". -> target"
           key: ${{ inputs.platform }}-${{ inputs.target }}-vulkan-v2
 
+      # Use current distro WebKitGTK 4.1 packages (pinned versions break when Ubuntu updates repos)
       - name: install dependencies (ubuntu 24.04)
         if: contains(inputs.platform, 'ubuntu-24.04')
         run: |
           sudo apt-get update
           sudo apt-get install -y libappindicator3-dev librsvg2-dev patchelf libasound2-dev libopenblas-dev libx11-dev libxtst-dev libxrandr-dev \
-            libwebkit2gtk-4.1-0=2.44.0-2 \
-            libwebkit2gtk-4.1-dev=2.44.0-2 \
-            libjavascriptcoregtk-4.1-0=2.44.0-2 \
-            libjavascriptcoregtk-4.1-dev=2.44.0-2 \
-            gir1.2-javascriptcoregtk-4.1=2.44.0-2 \
-            gir1.2-webkit2-4.1=2.44.0-2
+            libwebkit2gtk-4.1-dev libjavascriptcoregtk-4.1-dev gir1.2-webkit2-4.1 gir1.2-javascriptcoregtk-4.1
 
       - name: install dependencies (ubuntu 22.04)
         if: contains(inputs.platform, 'ubuntu-22.04')
@@ -505,6 +501,34 @@ jobs:
 
           echo "features=$FEATURES" >> "$GITHUB_OUTPUT"
 
+      - name: Compose Tauri CLI args
+        id: tauri-args
+        shell: bash
+        run: |
+          set -euo pipefail
+          FULL=""
+          if [[ "${{ inputs.is-debug-build }}" == "true" ]]; then
+            FULL="$FULL --debug"
+          fi
+          BA="${{ inputs.build-args }}"
+          if [[ -n "$BA" ]]; then
+            FULL="$FULL $BA"
+          fi
+          FEAT="${{ steps.build-features.outputs.features }}"
+          if [[ -n "$FEAT" ]]; then
+            FULL="$FULL $FEAT"
+          fi
+          if [[ -n "${{ inputs.target }}" ]]; then
+            FULL="$FULL --target ${{ inputs.target }}"
+          fi
+          FULL="$(echo "$FULL" | sed 's/^[[:space:]]*//')"
+          echo "Computed tauri args: $FULL"
+          {
+            echo "args<<TAURI_ARGS_EOF"
+            echo "$FULL"
+            echo "TAURI_ARGS_EOF"
+          } >> "$GITHUB_OUTPUT"
+
       - name: Cache FFmpeg binary
         uses: actions/cache@v4
         with:
@@ -536,7 +560,7 @@ jobs:
           tagName: ${{ inputs.release-id && format('v{0}', steps.get-version.outputs.version) || '' }}
           releaseName: ${{ inputs.release-id && format('v{0}', steps.get-version.outputs.version) || '' }}
           releaseId: ${{ inputs.release-id }}
-          args: ${{ inputs.build-args }} ${{ steps.build-features.outputs.features }}
+          args: ${{ steps.tauri-args.outputs.args }}
 
       - name: Upload artifacts (macOS)
         if: inputs.upload-artifacts && contains(inputs.platform, 'macos')
@@ -560,7 +584,7 @@ jobs:
         if: contains(inputs.platform, 'ubuntu')
         run: |
           # Find the AppImage file
-          APPIMAGE_PATH=$(find target/${{ steps.build-profile.outputs.profile }}/bundle/appimage -name "*.AppImage" | head -1)
+          APPIMAGE_PATH=$(find "target/${{ inputs.target }}/${{ steps.build-profile.outputs.profile }}/bundle/appimage" -name "*.AppImage" 2>/dev/null | head -1)
 
           if [ -n "$APPIMAGE_PATH" ]; then
             echo "Processing AppImage: $APPIMAGE_PATH"
@@ -607,9 +631,9 @@ jobs:
         with:
           name: ${{ inputs.asset-prefix }}-${{ inputs.platform }}-${{ inputs.target }}
           path: |
-            target/${{ steps.build-profile.outputs.profile }}/bundle/deb/*.deb
-            target/${{ steps.build-profile.outputs.profile }}/bundle/appimage/*.AppImage
-            target/${{ steps.build-profile.outputs.profile }}/bundle/rpm/*.rpm
+            target/${{ inputs.target }}/${{ steps.build-profile.outputs.profile }}/bundle/deb/*.deb
+            target/${{ inputs.target }}/${{ steps.build-profile.outputs.profile }}/bundle/appimage/*.AppImage
+            target/${{ inputs.target }}/${{ steps.build-profile.outputs.profile }}/bundle/rpm/*.rpm
           retention-days: 30
 
       - name: Upload artifacts (Windows)
@@ -618,8 +642,8 @@ jobs:
         with:
           name: ${{ inputs.asset-prefix }}-${{ inputs.target }}
           path: |
-            target/${{ steps.build-profile.outputs.profile }}/bundle/msi/*.msi
-            target/${{ steps.build-profile.outputs.profile }}/bundle/msi/*.msi.sig
-            target/${{ steps.build-profile.outputs.profile }}/bundle/nsis/*.exe
-            target/${{ steps.build-profile.outputs.profile }}/bundle/nsis/*.exe.sig
+            target/${{ inputs.target }}/${{ steps.build-profile.outputs.profile }}/bundle/msi/*.msi
+            target/${{ inputs.target }}/${{ steps.build-profile.outputs.profile }}/bundle/msi/*.msi.sig
+            target/${{ inputs.target }}/${{ steps.build-profile.outputs.profile }}/bundle/nsis/*.exe
+            target/${{ inputs.target }}/${{ steps.build-profile.outputs.profile }}/bundle/nsis/*.exe.sig
           retention-days: 30
