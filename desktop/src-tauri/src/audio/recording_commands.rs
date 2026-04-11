@@ -15,8 +15,8 @@ use crate::database::repositories::transcript::{SaveTranscriptOptions, Transcrip
 
 use super::transcription::{self, reset_speech_detected_flag};
 use super::{
-    default_input_device, default_output_device, AudioDevice, DeviceEvent,
-    DeviceMonitorType, RecordingManager,
+    default_input_device, default_output_device, AudioDevice, DeviceEvent, DeviceMonitorType,
+    RecordingManager,
 };
 
 pub use super::transcription::TranscriptUpdate;

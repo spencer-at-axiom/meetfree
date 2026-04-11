@@ -195,10 +195,12 @@ pub fn get_device_and_config_blocking(
                                     Ok(cfg) => cfg,
                                     Err(_) => {
                                         let mut fallback = None;
-                                        if let Ok(mut supported) = device.supported_input_configs() {
+                                        if let Ok(mut supported) = device.supported_input_configs()
+                                        {
                                             for cfg in supported.by_ref() {
                                                 let max_cfg = cfg.with_max_sample_rate();
-                                                if max_cfg.sample_format() == cpal::SampleFormat::F32
+                                                if max_cfg.sample_format()
+                                                    == cpal::SampleFormat::F32
                                                 {
                                                     fallback = Some(max_cfg);
                                                     break;

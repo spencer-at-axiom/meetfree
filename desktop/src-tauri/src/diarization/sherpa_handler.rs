@@ -22,7 +22,9 @@ impl SherpaDiarizationHandler {
             if cfg!(debug_assertions) {
                 current_dir.join("models").join("diarization")
             } else {
-                crate::brand::data_root()?.join("models").join("diarization")
+                crate::brand::data_root()?
+                    .join("models")
+                    .join("diarization")
             }
         };
 
@@ -63,7 +65,12 @@ impl SherpaDiarizationHandler {
 
         // Run diarization in blocking task to avoid blocking async runtime
         let segments = tokio::task::spawn_blocking(move || {
-            Self::run_diarization_blocking(&seg_model_str, &emb_model_str, audio_samples, sample_rate)
+            Self::run_diarization_blocking(
+                &seg_model_str,
+                &emb_model_str,
+                audio_samples,
+                sample_rate,
+            )
         })
         .await
         .map_err(|e| anyhow!("Diarization task failed: {}", e))??;
@@ -130,8 +137,8 @@ impl SherpaDiarizationHandler {
         use symphonia::core::probe::Hint;
 
         let path = Path::new(audio_path);
-        let file = std::fs::File::open(path)
-            .map_err(|e| anyhow!("Failed to open audio file: {}", e))?;
+        let file =
+            std::fs::File::open(path).map_err(|e| anyhow!("Failed to open audio file: {}", e))?;
 
         let mss = MediaSourceStream::new(Box::new(file), Default::default());
         let mut hint = Hint::new();

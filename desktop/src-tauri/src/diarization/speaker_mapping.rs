@@ -42,7 +42,11 @@ pub fn map_speakers_to_transcripts(
                 .unwrap_or(speaker_seg.end_ms);
 
             // Combine text from all segments in chunk
-            let combined_text = chunk.iter().map(|t| t.text.as_str()).collect::<Vec<_>>().join(" ");
+            let combined_text = chunk
+                .iter()
+                .map(|t| t.text.as_str())
+                .collect::<Vec<_>>()
+                .join(" ");
 
             // Calculate confidence based on overlap percentage
             let confidence = calculate_overlap_confidence(speaker_seg, start_ms, end_ms);
@@ -69,7 +73,9 @@ fn segments_overlap(speaker_seg: &SpeakerSegment, transcript: &TranscriptSegment
 }
 
 /// Group consecutive transcripts without large gaps
-fn group_consecutive_transcripts(transcripts: Vec<&TranscriptSegment>) -> Vec<Vec<&TranscriptSegment>> {
+fn group_consecutive_transcripts(
+    transcripts: Vec<&TranscriptSegment>,
+) -> Vec<Vec<&TranscriptSegment>> {
     if transcripts.is_empty() {
         return Vec::new();
     }
@@ -98,11 +104,7 @@ fn group_consecutive_transcripts(transcripts: Vec<&TranscriptSegment>) -> Vec<Ve
 }
 
 /// Calculate confidence based on overlap percentage
-fn calculate_overlap_confidence(
-    speaker_seg: &SpeakerSegment,
-    start_ms: i64,
-    end_ms: i64,
-) -> f64 {
+fn calculate_overlap_confidence(speaker_seg: &SpeakerSegment, start_ms: i64, end_ms: i64) -> f64 {
     let speaker_duration = (speaker_seg.end_ms - speaker_seg.start_ms).max(1);
     let overlap_start = start_ms.max(speaker_seg.start_ms);
     let overlap_end = end_ms.min(speaker_seg.end_ms);

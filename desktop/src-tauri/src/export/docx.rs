@@ -42,7 +42,10 @@ pub fn build_docx_document(context: &ExportContext) -> Result<Vec<u8>, String> {
     // Metadata
     let mut metadata_items = vec![
         format!("Date: {}", context.meeting.created_at),
-        format!("Duration: {}", format_duration(context.meeting.duration_seconds)),
+        format!(
+            "Duration: {}",
+            format_duration(context.meeting.duration_seconds)
+        ),
         format!("Source: {}", context.meeting.source_type),
         format!(
             "Language: {}",
@@ -53,8 +56,11 @@ pub fn build_docx_document(context: &ExportContext) -> Result<Vec<u8>, String> {
 
     if let Some(status) = &context.meeting.diarization_status {
         if status == "completed" && !context.speaker_turns.is_empty() {
-            let unique_speakers: std::collections::HashSet<_> =
-                context.speaker_turns.iter().map(|turn| turn.speaker_number).collect();
+            let unique_speakers: std::collections::HashSet<_> = context
+                .speaker_turns
+                .iter()
+                .map(|turn| turn.speaker_number)
+                .collect();
             metadata_items.push(format!("Speakers identified: {}", unique_speakers.len()));
         }
     }
@@ -73,12 +79,22 @@ pub fn build_docx_document(context: &ExportContext) -> Result<Vec<u8>, String> {
             Paragraph::new().add_run(Run::new().add_text("Summary").size(28).bold()),
         );
 
-        let (summary, action_items, decisions) = split_summary_sections(&context.summary_markdown);
+        let (summary, fallback_action_items, fallback_decisions) =
+            split_summary_markdown_sections(&context.summary_markdown);
+        let action_items = if context.action_items.is_empty() {
+            fallback_action_items
+        } else {
+            render_action_items_markdown(&context.action_items)
+        };
+        let decisions = if context.decisions.is_empty() {
+            fallback_decisions
+        } else {
+            render_decisions_markdown(&context.decisions)
+        };
 
         if !summary.is_empty() {
             let summary_clean = clean_markdown_text(&summary);
-            docx =
-                docx.add_paragraph(Paragraph::new().add_run(Run::new().add_text(summary_clean)));
+            docx = docx.add_paragraph(Paragraph::new().add_run(Run::new().add_text(summary_clean)));
         }
 
         if !action_items.is_empty() {
@@ -86,12 +102,11 @@ pub fn build_docx_document(context: &ExportContext) -> Result<Vec<u8>, String> {
             docx = docx.add_paragraph(
                 Paragraph::new().add_run(Run::new().add_text("Action Items").size(24).bold()),
             );
-            let items_clean = clean_markdown_text(&action_items);
-            for line in items_clean.lines() {
+            for line in action_items.lines() {
                 if !line.trim().is_empty() {
-                    docx = docx.add_paragraph(
-                        Paragraph::new().add_run(Run::new().add_text(format!("- {}", line))),
-                    );
+                    let clean_line = clean_markdown_text(line);
+                    docx = docx
+                        .add_paragraph(Paragraph::new().add_run(Run::new().add_text(clean_line)));
                 }
             }
         }
@@ -101,12 +116,11 @@ pub fn build_docx_document(context: &ExportContext) -> Result<Vec<u8>, String> {
             docx = docx.add_paragraph(
                 Paragraph::new().add_run(Run::new().add_text("Key Decisions").size(24).bold()),
             );
-            let decisions_clean = clean_markdown_text(&decisions);
-            for line in decisions_clean.lines() {
+            for line in decisions.lines() {
                 if !line.trim().is_empty() {
-                    docx = docx.add_paragraph(
-                        Paragraph::new().add_run(Run::new().add_text(format!("- {}", line))),
-                    );
+                    let clean_line = clean_markdown_text(line);
+                    docx = docx
+                        .add_paragraph(Paragraph::new().add_run(Run::new().add_text(clean_line)));
                 }
             }
         }
@@ -146,8 +160,7 @@ pub fn build_docx_document(context: &ExportContext) -> Result<Vec<u8>, String> {
     // Footer
     docx = docx.add_paragraph(Paragraph::new());
     docx = docx.add_paragraph(
-        Paragraph::new()
-            .add_run(Run::new().add_text("Document Information").size(28).bold()),
+        Paragraph::new().add_run(Run::new().add_text("Document Information").size(28).bold()),
     );
     docx = docx.add_paragraph(Paragraph::new());
 
@@ -212,10 +225,14 @@ pub async fn export_meeting_docx<R: Runtime>(
     }
 
     let destination_dir = resolve_single_destination_dir(app, &context.meeting, destination_root)?;
-    let output_path =
-        write_export_file_with_collision(&destination_dir, &context.meeting.title, "docx", &docx_bytes)
-            .await
-            .map_err(|e| format!("Failed to write DOCX export: {}", e))?;
+    let output_path = write_export_file_with_collision(
+        &destination_dir,
+        &context.meeting.title,
+        "docx",
+        &docx_bytes,
+    )
+    .await
+    .map_err(|e| format!("Failed to write DOCX export: {}", e))?;
 
     persist_export_path(pool, meeting_id, "docx_export_path", &output_path).await?;
 
@@ -281,10 +298,14 @@ async fn export_single_batch_meeting_docx(
             sanitize_filename(&context.meeting.title),
             &context.meeting.id
         ));
-        let output_path =
-            write_export_file_with_collision(&subfolder, &context.meeting.title, "docx", &docx_bytes)
-                .await
-                .map_err(|e| format!("Failed to write DOCX export: {}", e))?;
+        let output_path = write_export_file_with_collision(
+            &subfolder,
+            &context.meeting.title,
+            "docx",
+            &docx_bytes,
+        )
+        .await
+        .map_err(|e| format!("Failed to write DOCX export: {}", e))?;
 
         persist_export_path(pool, meeting_id, "docx_export_path", &output_path).await?;
 
@@ -347,65 +368,6 @@ fn clean_markdown_text(text: &str) -> String {
         .replace("*", "")
         .trim()
         .to_string()
-}
-
-fn split_summary_sections(summary_markdown: &str) -> (String, String, String) {
-    let trimmed = summary_markdown.trim();
-    if trimmed.is_empty() {
-        return (String::new(), String::new(), String::new());
-    }
-
-    let mut action_items = String::new();
-    let mut decisions = String::new();
-    let mut summary_lines = Vec::<String>::new();
-    let mut current_section = "summary";
-
-    for line in trimmed.lines() {
-        let heading = parse_markdown_heading(line);
-        if let Some(heading_text) = heading {
-            let normalized = normalize_heading(&heading_text);
-            if normalized.contains("action item") {
-                current_section = "action";
-                continue;
-            }
-            if normalized == "decisions"
-                || normalized == "key decisions"
-                || normalized.contains(" decision")
-            {
-                current_section = "decisions";
-                continue;
-            }
-            current_section = "summary";
-            summary_lines.push(line.to_string());
-            continue;
-        }
-
-        match current_section {
-            "action" => {
-                if !action_items.is_empty() {
-                    action_items.push('\n');
-                }
-                action_items.push_str(line);
-            }
-            "decisions" => {
-                if !decisions.is_empty() {
-                    decisions.push('\n');
-                }
-                decisions.push_str(line);
-            }
-            _ => summary_lines.push(line.to_string()),
-        }
-    }
-
-    if action_items.trim().is_empty() && decisions.trim().is_empty() {
-        return (trimmed.to_string(), String::new(), String::new());
-    }
-
-    (
-        summary_lines.join("\n").trim().to_string(),
-        action_items.trim().to_string(),
-        decisions.trim().to_string(),
-    )
 }
 
 #[cfg(test)]

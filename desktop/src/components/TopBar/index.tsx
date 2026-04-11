@@ -1,7 +1,7 @@
 'use client';
 
 import { useRouter, usePathname } from 'next/navigation';
-import { Settings, Mic, Calendar, Upload, FileOutput, MoreVertical, Keyboard } from 'lucide-react';
+import { Settings, Mic, Calendar, Upload, FileOutput, MoreVertical, Keyboard, Users } from 'lucide-react';
 import Logo from '../Logo';
 import { useImportDialog } from '@/contexts/ImportDialogContext';
 import { useState, useEffect } from 'react';
@@ -31,6 +31,7 @@ export function TopBar({ isOnboarding = false }: TopBarProps) {
 
   const isRecordRoute = pathname === '/';
   const isMeetings = pathname === '/meetings';
+  const isSpeakerIdentities = pathname === '/speaker-identities';
   const isSettings = pathname === '/settings';
   const isRecordingActive = isRecording || isPaused;
 
@@ -131,6 +132,19 @@ export function TopBar({ isOnboarding = false }: TopBarProps) {
             >
               <Calendar className="w-3.5 h-3.5" />
               Meetings
+            </button>
+
+            <button
+              onClick={() => router.push('/speaker-identities')}
+              className={`flex items-center gap-1.5 px-3 py-1 rounded-md text-[13px] font-medium transition-all duration-150 ${
+                isSpeakerIdentities
+                  ? 'bg-gray-100 text-gray-900 shadow-sm'
+                  : 'text-gray-600 hover:text-gray-900 hover:bg-gray-100/70'
+              } pointer-events-auto`}
+              data-no-drag
+            >
+              <Users className="w-3.5 h-3.5" />
+              Identities
             </button>
           </>
         )}

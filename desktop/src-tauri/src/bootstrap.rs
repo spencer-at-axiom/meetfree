@@ -57,7 +57,7 @@ pub async fn cleanup_on_exit(app_handle: &AppHandle<Wry>) {
     } else {
         log::warn!("AppState not available for database cleanup (likely first launch)");
     }
-    
+
     // No additional summary-engine shutdown hooks are required.
 }
 
@@ -101,7 +101,7 @@ fn initialize_model_engines(app: &AppHandle<Wry>) {
             log::error!("Failed to initialize Parakeet engine on startup: {}", e);
         }
     });
-    
+
     // Summary providers are configured at runtime; no dedicated model manager bootstrapping here.
 }
 

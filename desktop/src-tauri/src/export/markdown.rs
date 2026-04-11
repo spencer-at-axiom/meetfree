@@ -7,8 +7,8 @@ use serde::Serialize;
 use tauri::{AppHandle, Manager, Runtime};
 use tokio::fs;
 
-use crate::database::repositories::vocabulary::VocabularyRule;
 use super::common::*;
+use crate::database::repositories::vocabulary::VocabularyRule;
 
 #[derive(Debug, Serialize)]
 pub struct MeetingMarkdownExportResult {
@@ -62,6 +62,8 @@ pub async fn export_meeting_markdown<R: Runtime>(
         &context.summary_markdown,
         &context.transcript_rows,
         &context.speaker_turns,
+        &context.action_items,
+        &context.decisions,
         &context.vocabulary_rules,
     );
 
@@ -141,6 +143,8 @@ async fn export_single_batch_meeting(
             &context.summary_markdown,
             &context.transcript_rows,
             &context.speaker_turns,
+            &context.action_items,
+            &context.decisions,
             &context.vocabulary_rules,
         );
 
@@ -209,10 +213,22 @@ pub fn render_meeting_markdown(
     summary_markdown: &str,
     transcript_rows: &[TranscriptExportRow],
     speaker_turns: &[SpeakerTurnExportRow],
+    action_items: &[ActionItemExportRow],
+    decisions: &[DecisionExportRow],
     vocabulary: &[VocabularyRule],
 ) -> String {
-    let (summary_section, action_items_section, decisions_section) =
-        split_summary_sections(summary_markdown);
+    let (summary_section, fallback_action_items, fallback_decisions) =
+        split_summary_markdown_sections(summary_markdown);
+    let action_items_section = if action_items.is_empty() {
+        fallback_action_items
+    } else {
+        render_action_items_markdown(action_items)
+    };
+    let decisions_section = if decisions.is_empty() {
+        fallback_decisions
+    } else {
+        render_decisions_markdown(decisions)
+    };
 
     let transcript_lines = if transcript_rows.is_empty() {
         vec!["_No transcript available._".to_string()]
@@ -254,17 +270,17 @@ pub fn render_meeting_markdown(
             .unwrap_or_else(|| "null".to_string())
     ));
     output.push_str(&format!("transcript_count: {}\n", transcript_rows.len()));
-    
+
     // Add diarization info if available
     if let Some(status) = &meeting.diarization_status {
         output.push_str(&format!("diarization_status: {}\n", yaml_quote(status)));
         if status == "completed" && !speaker_turns.is_empty() {
-            let unique_speakers: std::collections::HashSet<_> = 
+            let unique_speakers: std::collections::HashSet<_> =
                 speaker_turns.iter().map(|t| t.speaker_number).collect();
             output.push_str(&format!("speaker_count: {}\n", unique_speakers.len()));
         }
     }
-    
+
     output.push_str(&format!(
         "exported_at: {}\n",
         yaml_quote(&chrono::Utc::now().to_rfc3339())
@@ -292,65 +308,6 @@ pub fn render_meeting_markdown(
     output
 }
 
-fn split_summary_sections(summary_markdown: &str) -> (String, String, String) {
-    let trimmed = summary_markdown.trim();
-    if trimmed.is_empty() {
-        return (String::new(), String::new(), String::new());
-    }
-
-    let mut action_items = String::new();
-    let mut decisions = String::new();
-    let mut summary_lines = Vec::<String>::new();
-    let mut current_section = "summary";
-
-    for line in trimmed.lines() {
-        let heading = parse_markdown_heading(line);
-        if let Some(heading_text) = heading {
-            let normalized = normalize_heading(&heading_text);
-            if normalized.contains("action item") {
-                current_section = "action";
-                continue;
-            }
-            if normalized == "decisions"
-                || normalized == "key decisions"
-                || normalized.contains(" decision")
-            {
-                current_section = "decisions";
-                continue;
-            }
-            current_section = "summary";
-            summary_lines.push(line.to_string());
-            continue;
-        }
-
-        match current_section {
-            "action" => {
-                if !action_items.is_empty() {
-                    action_items.push('\n');
-                }
-                action_items.push_str(line);
-            }
-            "decisions" => {
-                if !decisions.is_empty() {
-                    decisions.push('\n');
-                }
-                decisions.push_str(line);
-            }
-            _ => summary_lines.push(line.to_string()),
-        }
-    }
-
-    if action_items.trim().is_empty() && decisions.trim().is_empty() {
-        return (trimmed.to_string(), String::new(), String::new());
-    }
-
-    (
-        summary_lines.join("\n").trim().to_string(),
-        action_items.trim().to_string(),
-        decisions.trim().to_string(),
-    )
-}
-
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -366,7 +323,7 @@ Status update
 - Ship on Friday
 "#;
 
-        let (summary, actions, decisions) = split_summary_sections(input);
+        let (summary, actions, decisions) = split_summary_markdown_sections(input);
         assert!(summary.contains("Status update"));
         assert_eq!(actions.trim(), "- Send notes");
         assert_eq!(decisions.trim(), "- Ship on Friday");
@@ -407,6 +364,8 @@ Status update
             "## Action Items\n- Follow up",
             &transcript_rows,
             &speaker_turns,
+            &[],
+            &[],
             &rules,
         );
 
@@ -417,5 +376,45 @@ Status update
         assert!(rendered.contains("OpenAI roadmap"));
         assert!(rendered.contains("- Follow up"));
         assert!(rendered.contains("_No decisions captured._"));
+    }
+
+    #[test]
+    fn render_meeting_markdown_prefers_structured_entities() {
+        let meeting = MeetingExportData {
+            id: "meeting-2".to_string(),
+            title: "Product Review".to_string(),
+            created_at: "2026-01-02T00:00:00Z".to_string(),
+            updated_at: "2026-01-02T00:00:00Z".to_string(),
+            folder_path: None,
+            source_type: "recorded".to_string(),
+            language: Some("en".to_string()),
+            duration_seconds: Some(60.0),
+            diarization_status: None,
+        };
+
+        let rendered = render_meeting_markdown(
+            &meeting,
+            "## Action Items\n- Legacy fallback\n## Decisions\n- Legacy decision",
+            &[],
+            &[],
+            &[ActionItemExportRow {
+                title: "Structured follow up".to_string(),
+                owner_display_name: Some("Alex".to_string()),
+                due_date: Some("2026-01-05".to_string()),
+                status: "open".to_string(),
+                source_excerpt: None,
+            }],
+            &[DecisionExportRow {
+                title: "Use structured export".to_string(),
+                source_excerpt: None,
+            }],
+            &[],
+        );
+
+        assert!(rendered.contains("Structured follow up"));
+        assert!(rendered.contains("[owner:: Alex]"));
+        assert!(rendered.contains("Use structured export"));
+        assert!(!rendered.contains("Legacy fallback"));
+        assert!(!rendered.contains("Legacy decision"));
     }
 }

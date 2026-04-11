@@ -14,7 +14,11 @@ pub mod speaker_mapping;
 #[cfg(test)]
 mod tests;
 
+use crate::database::repositories::speaker_identity::{
+    NewMeetingSpeaker, SpeakerIdentitiesRepository,
+};
 use serde::Serialize;
+use std::collections::{HashMap, HashSet};
 use std::sync::Arc;
 use tauri::{AppHandle, Emitter, Runtime};
 
@@ -90,7 +94,7 @@ async fn diarize_audio_and_store(
     // Get speaker segments from sherpa-onnx
     let handler = sherpa_handler::SherpaDiarizationHandler::new(None)
         .map_err(|e| format!("Failed to create diarization handler: {}", e))?;
-    
+
     // Check if models are available
     if !handler.models_available().await {
         return Err(format!(
@@ -98,7 +102,7 @@ async fn diarize_audio_and_store(
             handler.get_models_dir().display()
         ));
     }
-    
+
     let speaker_segments = handler
         .diarize_audio(audio_path)
         .await
@@ -165,6 +169,60 @@ async fn store_speaker_turns(
     meeting_id: &str,
     speaker_turns: &[SpeakerTurn],
 ) -> Result<(), String> {
+    let existing_meeting_speakers =
+        SpeakerIdentitiesRepository::list_meeting_speakers(pool, meeting_id)
+            .await
+            .map_err(|e| format!("Failed to fetch meeting speakers: {}", e))?;
+
+    let mut existing_by_number: HashMap<i64, crate::database::models::MeetingSpeakerModel> =
+        existing_meeting_speakers
+            .into_iter()
+            .filter(|speaker| speaker.is_active)
+            .filter_map(|speaker| {
+                speaker
+                    .diarization_speaker_number
+                    .map(|number| (number, speaker))
+            })
+            .collect();
+
+    let unique_speaker_numbers: HashSet<i64> = speaker_turns
+        .iter()
+        .map(|turn| turn.speaker_number as i64)
+        .collect();
+
+    let mut meeting_speaker_ids = HashMap::new();
+    let mut active_ids = Vec::new();
+
+    for speaker_number in unique_speaker_numbers {
+        let meeting_speaker = if let Some(existing) = existing_by_number.remove(&speaker_number) {
+            let _ =
+                SpeakerIdentitiesRepository::reactivate_meeting_speaker(pool, &existing.id).await;
+            existing
+        } else {
+            SpeakerIdentitiesRepository::create_meeting_speaker(
+                pool,
+                NewMeetingSpeaker {
+                    meeting_id: meeting_id.to_string(),
+                    diarization_speaker_number: Some(speaker_number),
+                    display_name_override: None,
+                    speaker_identity_id: None,
+                    review_status: "unreviewed".to_string(),
+                    match_confidence: None,
+                    is_active: true,
+                },
+            )
+            .await
+            .map_err(|e| format!("Failed to create meeting speaker: {}", e))?
+        };
+
+        active_ids.push(meeting_speaker.id.clone());
+        meeting_speaker_ids.insert(speaker_number as u32, meeting_speaker);
+    }
+
+    SpeakerIdentitiesRepository::retire_unmatched_meeting_speakers(pool, meeting_id, &active_ids)
+        .await
+        .map_err(|e| format!("Failed to retire stale meeting speakers: {}", e))?;
+
     // Clear any existing speaker turns for this meeting
     sqlx::query("DELETE FROM speaker_turns WHERE meeting_id = ?")
         .bind(meeting_id)
@@ -175,14 +233,28 @@ async fn store_speaker_turns(
     // Insert new speaker turns
     for turn in speaker_turns {
         let turn_id = uuid::Uuid::new_v4().to_string();
+        let meeting_speaker = meeting_speaker_ids
+            .get(&turn.speaker_number)
+            .ok_or_else(|| {
+                format!(
+                    "No meeting speaker mapping found for speaker number {}",
+                    turn.speaker_number
+                )
+            })?;
+        let denormalized_name = meeting_speaker.display_name_override.clone();
+
         sqlx::query(
-            "INSERT INTO speaker_turns (id, meeting_id, speaker_number, speaker_name, start_ms, end_ms, text, confidence, created_at)
-             VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)"
+            "INSERT INTO speaker_turns (
+                id, meeting_id, meeting_speaker_id, speaker_number, speaker_name,
+                start_ms, end_ms, text, confidence, created_at
+             )
+             VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
         )
         .bind(turn_id)
         .bind(meeting_id)
+        .bind(&meeting_speaker.id)
         .bind(turn.speaker_number as i32)
-        .bind(None::<String>) // speaker_name, will be populated later
+        .bind(denormalized_name)
         .bind(turn.start_ms)
         .bind(turn.end_ms)
         .bind(&turn.text)
@@ -250,9 +322,7 @@ pub async fn get_diarization_models<R: Runtime>(
 
 /// Download diarization models
 #[tauri::command]
-pub async fn download_diarization_models<R: Runtime>(
-    app: AppHandle<R>,
-) -> Result<String, String> {
+pub async fn download_diarization_models<R: Runtime>(app: AppHandle<R>) -> Result<String, String> {
     let models_dir = if cfg!(debug_assertions) {
         std::env::current_dir()
             .map_err(|e| format!("Failed to get current directory: {}", e))?
@@ -269,10 +339,15 @@ pub async fn download_diarization_models<R: Runtime>(
 
     // Download with progress events
     let app_clone = app.clone();
-    let progress_callback: Arc<dyn Fn(String, model_manager::DownloadProgress) + Send + Sync> = 
-        Arc::new(move |model_type: String, progress: model_manager::DownloadProgress| {
-            let _ = app_clone.emit("diarization-model-download-progress", (model_type, progress));
-        });
+    let progress_callback: Arc<dyn Fn(String, model_manager::DownloadProgress) + Send + Sync> =
+        Arc::new(
+            move |model_type: String, progress: model_manager::DownloadProgress| {
+                let _ = app_clone.emit(
+                    "diarization-model-download-progress",
+                    (model_type, progress),
+                );
+            },
+        );
 
     manager
         .download_all_models(Some(progress_callback))

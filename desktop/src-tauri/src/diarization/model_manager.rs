@@ -94,11 +94,17 @@ impl DiarizationModelManager {
         let model_path = dest_dir.join("model.onnx");
 
         // Download archive
-        self.download_file(url, &archive_path, progress_callback).await?;
+        self.download_file(url, &archive_path, progress_callback)
+            .await?;
 
         // Extract model.onnx from archive
         log::info!("Extracting segmentation model from archive...");
-        self.extract_model_from_archive(&archive_path, &model_path, "sherpa-onnx-pyannote-segmentation-3-0/model.onnx").await?;
+        self.extract_model_from_archive(
+            &archive_path,
+            &model_path,
+            "sherpa-onnx-pyannote-segmentation-3-0/model.onnx",
+        )
+        .await?;
 
         // Clean up archive
         if archive_path.exists() {
@@ -132,9 +138,10 @@ impl DiarizationModelManager {
         // Download segmentation model
         if let Some(cb) = progress_callback.as_ref() {
             let cb_clone = Arc::clone(cb);
-            let seg_cb: Box<dyn Fn(DownloadProgress) + Send> = Box::new(move |p: DownloadProgress| {
-                cb_clone("segmentation".to_string(), p);
-            });
+            let seg_cb: Box<dyn Fn(DownloadProgress) + Send> =
+                Box::new(move |p: DownloadProgress| {
+                    cb_clone("segmentation".to_string(), p);
+                });
             self.download_segmentation_model(Some(seg_cb)).await?;
         } else {
             self.download_segmentation_model(None).await?;
@@ -143,9 +150,10 @@ impl DiarizationModelManager {
         // Download embedding model
         if let Some(cb) = progress_callback.as_ref() {
             let cb_clone = Arc::clone(cb);
-            let emb_cb: Box<dyn Fn(DownloadProgress) + Send> = Box::new(move |p: DownloadProgress| {
-                cb_clone("embedding".to_string(), p);
-            });
+            let emb_cb: Box<dyn Fn(DownloadProgress) + Send> =
+                Box::new(move |p: DownloadProgress| {
+                    cb_clone("embedding".to_string(), p);
+                });
             self.download_embedding_model(Some(emb_cb)).await?;
         } else {
             self.download_embedding_model(None).await?;
@@ -284,10 +292,10 @@ impl DiarizationModelManager {
         for entry_result in archive.entries()? {
             let mut entry = entry_result?;
             let path = entry.path()?;
-            
+
             if path.to_string_lossy() == model_path_in_archive {
                 log::info!("Found model file in archive: {}", path.display());
-                
+
                 // Create output directory if needed
                 if let Some(parent) = output_path.parent() {
                     std::fs::create_dir_all(parent)?;
@@ -296,7 +304,7 @@ impl DiarizationModelManager {
                 // Extract to output path
                 let mut output_file = std::fs::File::create(output_path)?;
                 std::io::copy(&mut entry, &mut output_file)?;
-                
+
                 found = true;
                 log::info!("Extracted model to: {}", output_path.display());
                 break;

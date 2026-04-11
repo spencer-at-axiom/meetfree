@@ -105,3 +105,83 @@ pub struct TranscriptSetting {
     pub provider: String,
     pub model: String,
 }
+
+#[derive(Debug, Clone, FromRow, Serialize, Deserialize)]
+pub struct SpeakerIdentityModel {
+    pub id: String,
+    pub display_name: String,
+    pub normalized_name: String,
+    pub notes: Option<String>,
+    pub created_at: String,
+    pub updated_at: String,
+    pub archived_at: Option<String>,
+}
+
+#[derive(Debug, Clone, FromRow, Serialize, Deserialize)]
+pub struct VoiceProfileModel {
+    pub id: String,
+    pub speaker_identity_id: String,
+    pub profile_kind: String,
+    pub provider: Option<String>,
+    pub model_version: Option<String>,
+    pub sample_count: i64,
+    pub profile_payload: Option<String>,
+    pub created_at: String,
+    pub updated_at: String,
+    pub last_trained_at: Option<String>,
+}
+
+#[derive(Debug, Clone, FromRow, Serialize, Deserialize)]
+pub struct MeetingSpeakerModel {
+    pub id: String,
+    pub meeting_id: String,
+    pub diarization_speaker_number: Option<i64>,
+    pub display_name_override: Option<String>,
+    pub speaker_identity_id: Option<String>,
+    pub review_status: String,
+    pub match_confidence: Option<f64>,
+    pub is_active: bool,
+    pub created_at: String,
+    pub updated_at: String,
+    pub last_reviewed_at: Option<String>,
+    pub last_generated_at: Option<String>,
+}
+
+#[derive(Debug, Clone, FromRow, Serialize, Deserialize)]
+pub struct ActionItemModel {
+    pub id: String,
+    pub meeting_id: String,
+    pub title: String,
+    pub details: Option<String>,
+    pub owner_speaker_identity_id: Option<String>,
+    pub owner_display_name: Option<String>,
+    pub due_date: Option<String>,
+    pub status: String,
+    pub review_status: String,
+    pub source_transcript_id: Option<String>,
+    pub source_start_ms: Option<i64>,
+    pub source_end_ms: Option<i64>,
+    pub source_excerpt: Option<String>,
+    pub extraction_method: String,
+    pub extraction_version: String,
+    pub created_at: String,
+    pub updated_at: String,
+}
+
+#[derive(Debug, Clone, FromRow, Serialize, Deserialize)]
+pub struct DecisionModel {
+    pub id: String,
+    pub meeting_id: String,
+    pub title: String,
+    pub details: Option<String>,
+    pub review_status: String,
+    pub source_transcript_id: Option<String>,
+    pub source_start_ms: Option<i64>,
+    pub source_end_ms: Option<i64>,
+    pub source_excerpt: Option<String>,
+    pub extraction_method: String,
+    pub extraction_version: String,
+    pub related_action_item_ids: Option<String>,
+    pub created_at: String,
+    pub updated_at: String,
+}

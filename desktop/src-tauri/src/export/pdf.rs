@@ -1,9 +1,9 @@
 // PDF export implementation using genpdf
 // Generates professional PDF documents with metadata, summary, and transcript
 
-use std::path::PathBuf;
-use genpdf::{Document, elements, fonts};
+use genpdf::{elements, fonts, Document};
 use serde::Serialize;
+use std::path::PathBuf;
 use tauri::{AppHandle, Manager, Runtime};
 
 use super::common::*;
@@ -40,18 +40,30 @@ pub fn build_pdf_document(context: &ExportContext) -> Result<Vec<u8>, String> {
         italic: default_font.clone(),
         bold_italic: default_font,
     };
-    
+
     let mut document = Document::new(font_family);
     document.set_title(&context.meeting.title);
 
     // Title
-    document.push(elements::Paragraph::new(format!("Meeting: {}", context.meeting.title)));
+    document.push(elements::Paragraph::new(format!(
+        "Meeting: {}",
+        context.meeting.title
+    )));
 
     // Meeting info
     let duration_str = format_duration(context.meeting.duration_seconds);
-    document.push(elements::Paragraph::new(format!("Date: {}", context.meeting.created_at)));
-    document.push(elements::Paragraph::new(format!("Duration: {}", duration_str)));
-    document.push(elements::Paragraph::new(format!("Source: {}", context.meeting.source_type)));
+    document.push(elements::Paragraph::new(format!(
+        "Date: {}",
+        context.meeting.created_at
+    )));
+    document.push(elements::Paragraph::new(format!(
+        "Duration: {}",
+        duration_str
+    )));
+    document.push(elements::Paragraph::new(format!(
+        "Source: {}",
+        context.meeting.source_type
+    )));
     document.push(elements::Paragraph::new(format!(
         "Language: {}",
         context.meeting.language.as_deref().unwrap_or("unknown")
@@ -60,12 +72,15 @@ pub fn build_pdf_document(context: &ExportContext) -> Result<Vec<u8>, String> {
         "Segments: {}",
         context.transcript_rows.len()
     )));
-    
+
     // Add diarization info if available
     if let Some(status) = &context.meeting.diarization_status {
         if status == "completed" && !context.speaker_turns.is_empty() {
-            let unique_speakers: std::collections::HashSet<_> = 
-                context.speaker_turns.iter().map(|t| t.speaker_number).collect();
+            let unique_speakers: std::collections::HashSet<_> = context
+                .speaker_turns
+                .iter()
+                .map(|t| t.speaker_number)
+                .collect();
             document.push(elements::Paragraph::new(format!(
                 "Speakers: {}",
                 unique_speakers.len()
@@ -77,10 +92,110 @@ pub fn build_pdf_document(context: &ExportContext) -> Result<Vec<u8>, String> {
 
     // Summary section
     if !context.summary_markdown.is_empty() {
+        let (summary, fallback_action_items, fallback_decisions) =
+            split_summary_markdown_sections(&context.summary_markdown);
+
         document.push(elements::Paragraph::new("Summary"));
-        let summary_clean = clean_markdown_text(&context.summary_markdown);
+        let summary_clean = clean_markdown_text(&summary);
         for line in summary_clean.lines().take(10) {
             document.push(elements::Paragraph::new(line));
+        }
+
+        // Action Items section with structured entities
+        document.push(elements::Paragraph::new(""));
+        document.push(elements::Paragraph::new("Action Items"));
+
+        if !context.action_items.is_empty() {
+            // Use structured action items with full formatting
+            for item in &context.action_items {
+                // Title with status checkbox
+                let checkbox = if item.status == "completed" {
+                    "[x]"
+                } else {
+                    "[ ]"
+                };
+                document.push(elements::Paragraph::new(format!(
+                    "{} {}",
+                    checkbox, item.title
+                )));
+
+                // Owner, due date, status on separate lines with indentation
+                if let Some(owner) = &item.owner_display_name {
+                    if !owner.trim().is_empty() {
+                        document.push(elements::Paragraph::new(format!(
+                            "    Owner: {}",
+                            owner.trim()
+                        )));
+                    }
+                }
+                if let Some(due_date) = &item.due_date {
+                    if !due_date.trim().is_empty() {
+                        document.push(elements::Paragraph::new(format!(
+                            "    Due: {}",
+                            due_date.trim()
+                        )));
+                    }
+                }
+                document.push(elements::Paragraph::new(format!(
+                    "    Status: {}",
+                    item.status
+                )));
+
+                // Source excerpt if available
+                if let Some(excerpt) = &item.source_excerpt {
+                    if !excerpt.trim().is_empty() {
+                        document.push(elements::Paragraph::new(format!(
+                            "    Evidence: \"{}\"",
+                            excerpt.trim()
+                        )));
+                    }
+                }
+
+                document.push(elements::Paragraph::new(""));
+            }
+        } else if !fallback_action_items.is_empty() {
+            // Fallback to parsed summary markdown
+            for line in fallback_action_items.lines() {
+                if !line.trim().is_empty() {
+                    let clean_line = clean_markdown_text(line);
+                    document.push(elements::Paragraph::new(clean_line));
+                }
+            }
+        } else {
+            document.push(elements::Paragraph::new("No action items captured."));
+        }
+
+        // Decisions section with structured entities
+        document.push(elements::Paragraph::new(""));
+        document.push(elements::Paragraph::new("Decisions"));
+
+        if !context.decisions.is_empty() {
+            // Use structured decisions with full formatting
+            for decision in &context.decisions {
+                document.push(elements::Paragraph::new(format!("• {}", decision.title)));
+
+                // Source excerpt if available
+                if let Some(excerpt) = &decision.source_excerpt {
+                    if !excerpt.trim().is_empty() {
+                        document.push(elements::Paragraph::new(format!(
+                            "    Evidence: \"{}\"",
+                            excerpt.trim()
+                        )));
+                    }
+                }
+
+                document.push(elements::Paragraph::new(""));
+            }
+        } else if !fallback_decisions.is_empty() {
+            // Fallback to parsed summary markdown
+            for line in fallback_decisions.lines() {
+                if !line.trim().is_empty() {
+                    let clean_line = clean_markdown_text(line);
+                    document.push(elements::Paragraph::new(clean_line));
+                }
+            }
+        } else {
+            document.push(elements::Paragraph::new("No decisions captured."));
         }
     } else {
         document.push(elements::Paragraph::new("No summary available."));
@@ -91,13 +206,13 @@ pub fn build_pdf_document(context: &ExportContext) -> Result<Vec<u8>, String> {
     // Full transcript section with speaker labels
     if !context.transcript_rows.is_empty() {
         document.push(elements::Paragraph::new("Transcript"));
-        
+
         let transcript_lines = format_transcript_with_speakers(
             &context.transcript_rows,
             &context.speaker_turns,
             &context.vocabulary_rules,
         );
-        
+
         // Limit to first 100 lines for PDF performance
         for line in transcript_lines.iter().take(100) {
             let display_line = if line.len() > 80 {
@@ -108,7 +223,7 @@ pub fn build_pdf_document(context: &ExportContext) -> Result<Vec<u8>, String> {
 
             document.push(elements::Paragraph::new(display_line));
         }
-        
+
         if transcript_lines.len() > 100 {
             document.push(elements::Paragraph::new(format!(
                 "... and {} more segments (truncated for PDF)",
@@ -125,15 +240,14 @@ pub fn build_pdf_document(context: &ExportContext) -> Result<Vec<u8>, String> {
     )));
 
     // Render to a temporary file then read it
-    let temp_file = tempfile::NamedTempFile::new()
-        .map_err(|e| format!("Failed to create temp file: {}", e))?;
-    
+    let temp_file =
+        tempfile::NamedTempFile::new().map_err(|e| format!("Failed to create temp file: {}", e))?;
+
     document
         .render_to_file(temp_file.path())
         .map_err(|e| format!("Failed to render PDF: {}", e))?;
-    
-    std::fs::read(temp_file.path())
-        .map_err(|e| format!("Failed to read PDF: {}", e))
+
+    std::fs::read(temp_file.path()).map_err(|e| format!("Failed to read PDF: {}", e))
 }
 
 #[tauri::command]
@@ -249,14 +363,10 @@ async fn export_single_batch_meeting_pdf(
             sanitize_filename(&context.meeting.title),
             &context.meeting.id
         ));
-        let output_path = write_export_file_with_collision(
-            &subfolder,
-            &context.meeting.title,
-            "pdf",
-            &pdf_bytes,
-        )
-        .await
-        .map_err(|e| format!("Failed to write PDF export: {}", e))?;
+        let output_path =
+            write_export_file_with_collision(&subfolder, &context.meeting.title, "pdf", &pdf_bytes)
+                .await
+                .map_err(|e| format!("Failed to write PDF export: {}", e))?;
 
         persist_export_path(pool, meeting_id, "pdf_export_path", &output_path).await?;
 

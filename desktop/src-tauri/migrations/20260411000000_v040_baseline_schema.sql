@@ -96,9 +96,134 @@ CREATE UNIQUE INDEX IF NOT EXISTS idx_vocabulary_entries_scope_source_cs
 ON vocabulary_entries(scope_type, COALESCE(scope_id, ''), source_text)
 WHERE case_sensitive = 1;
 
+CREATE TABLE IF NOT EXISTS speaker_identities (
+    id TEXT PRIMARY KEY NOT NULL,
+    display_name TEXT NOT NULL,
+    normalized_name TEXT NOT NULL,
+    notes TEXT,
+    created_at TEXT NOT NULL,
+    updated_at TEXT NOT NULL,
+    archived_at TEXT
+);
+
+CREATE UNIQUE INDEX IF NOT EXISTS idx_speaker_identities_normalized_name
+ON speaker_identities(normalized_name)
+WHERE archived_at IS NULL;
+
+CREATE TABLE IF NOT EXISTS voice_profiles (
+    id TEXT PRIMARY KEY NOT NULL,
+    speaker_identity_id TEXT NOT NULL,
+    profile_kind TEXT NOT NULL CHECK (
+        profile_kind IN ('manual', 'embedding_v1')
+    ),
+    provider TEXT,
+    model_version TEXT,
+    sample_count INTEGER NOT NULL DEFAULT 0,
+    profile_payload TEXT,
+    created_at TEXT NOT NULL,
+    updated_at TEXT NOT NULL,
+    last_trained_at TEXT,
+    FOREIGN KEY (speaker_identity_id) REFERENCES speaker_identities(id) ON DELETE CASCADE
+);
+
+CREATE INDEX IF NOT EXISTS idx_voice_profiles_identity
+ON voice_profiles(speaker_identity_id);
+
+CREATE TABLE IF NOT EXISTS meeting_speakers (
+    id TEXT PRIMARY KEY NOT NULL,
+    meeting_id TEXT NOT NULL,
+    diarization_speaker_number INTEGER,
+    display_name_override TEXT,
+    speaker_identity_id TEXT,
+    review_status TEXT NOT NULL CHECK (
+        review_status IN ('unreviewed', 'suggested', 'confirmed', 'rejected')
+    ) DEFAULT 'unreviewed',
+    match_confidence REAL,
+    is_active INTEGER NOT NULL DEFAULT 1,
+    created_at TEXT NOT NULL,
+    updated_at TEXT NOT NULL,
+    last_reviewed_at TEXT,
+    last_generated_at TEXT,
+    FOREIGN KEY (meeting_id) REFERENCES meetings(id) ON DELETE CASCADE,
+    FOREIGN KEY (speaker_identity_id) REFERENCES speaker_identities(id) ON DELETE SET NULL
+);
+
+CREATE INDEX IF NOT EXISTS idx_meeting_speakers_meeting
+ON meeting_speakers(meeting_id);
+
+CREATE INDEX IF NOT EXISTS idx_meeting_speakers_identity
+ON meeting_speakers(speaker_identity_id);
+
+CREATE UNIQUE INDEX IF NOT EXISTS idx_meeting_speakers_active_number
+ON meeting_speakers(meeting_id, diarization_speaker_number)
+WHERE is_active = 1 AND diarization_speaker_number IS NOT NULL;
+
+CREATE TABLE IF NOT EXISTS action_items (
+    id TEXT PRIMARY KEY NOT NULL,
+    meeting_id TEXT NOT NULL,
+    title TEXT NOT NULL,
+    details TEXT,
+    owner_speaker_identity_id TEXT,
+    owner_display_name TEXT,
+    due_date TEXT,
+    status TEXT NOT NULL CHECK (
+        status IN ('open', 'completed', 'dismissed')
+    ) DEFAULT 'open',
+    review_status TEXT NOT NULL CHECK (
+        review_status IN ('unreviewed', 'accepted', 'edited', 'rejected')
+    ) DEFAULT 'unreviewed',
+    source_transcript_id TEXT,
+    source_start_ms INTEGER,
+    source_end_ms INTEGER,
+    source_excerpt TEXT,
+    extraction_method TEXT NOT NULL,
+    extraction_version TEXT NOT NULL,
+    created_at TEXT NOT NULL,
+    updated_at TEXT NOT NULL,
+    FOREIGN KEY (meeting_id) REFERENCES meetings(id) ON DELETE CASCADE,
+    FOREIGN KEY (owner_speaker_identity_id) REFERENCES speaker_identities(id) ON DELETE SET NULL,
+    FOREIGN KEY (source_transcript_id) REFERENCES transcripts(id) ON DELETE SET NULL
+);
+
+CREATE INDEX IF NOT EXISTS idx_action_items_meeting
+ON action_items(meeting_id);
+
+CREATE INDEX IF NOT EXISTS idx_action_items_owner
+ON action_items(owner_speaker_identity_id);
+
+CREATE INDEX IF NOT EXISTS idx_action_items_status
+ON action_items(status, review_status);
+
+CREATE TABLE IF NOT EXISTS decisions (
+    id TEXT PRIMARY KEY NOT NULL,
+    meeting_id TEXT NOT NULL,
+    title TEXT NOT NULL,
+    details TEXT,
+    review_status TEXT NOT NULL CHECK (
+        review_status IN ('unreviewed', 'accepted', 'edited', 'rejected')
+    ) DEFAULT 'unreviewed',
+    source_transcript_id TEXT,
+    source_start_ms INTEGER,
+    source_end_ms INTEGER,
+    source_excerpt TEXT,
+    extraction_method TEXT NOT NULL,
+    extraction_version TEXT NOT NULL,
+    created_at TEXT NOT NULL,
+    updated_at TEXT NOT NULL,
+    FOREIGN KEY (meeting_id) REFERENCES meetings(id) ON DELETE CASCADE,
+    FOREIGN KEY (source_transcript_id) REFERENCES transcripts(id) ON DELETE SET NULL
+);
+
+CREATE INDEX IF NOT EXISTS idx_decisions_meeting
+ON decisions(meeting_id);
+
+CREATE INDEX IF NOT EXISTS idx_decisions_review_status
+ON decisions(review_status);
+
 CREATE TABLE IF NOT EXISTS speaker_turns (
     id TEXT PRIMARY KEY,
     meeting_id TEXT NOT NULL,
+    meeting_speaker_id TEXT,
     speaker_number INTEGER NOT NULL,
     speaker_name TEXT,
     start_ms INTEGER NOT NULL,
@@ -106,7 +231,8 @@ CREATE TABLE IF NOT EXISTS speaker_turns (
     text TEXT NOT NULL,
     confidence REAL NOT NULL,
     created_at TEXT DEFAULT CURRENT_TIMESTAMP,
-    FOREIGN KEY(meeting_id) REFERENCES meetings(id) ON DELETE CASCADE
+    FOREIGN KEY(meeting_id) REFERENCES meetings(id) ON DELETE CASCADE,
+    FOREIGN KEY(meeting_speaker_id) REFERENCES meeting_speakers(id) ON DELETE SET NULL
 );
 
 CREATE INDEX IF NOT EXISTS idx_speaker_turns_meeting

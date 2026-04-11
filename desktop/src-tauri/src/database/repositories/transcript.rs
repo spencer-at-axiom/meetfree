@@ -361,7 +361,6 @@ impl TranscriptsRepository {
             offset,
         })
     }
-
 }
 
 fn build_fts_match_query(query: &str) -> String {

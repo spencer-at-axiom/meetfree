@@ -1,8 +1,8 @@
 // Shared export utilities and data collection
 // This module contains common functionality reused across all export formats (Markdown, PDF, DOCX)
 
-use std::path::{Path, PathBuf};
 use crate::database::repositories::vocabulary::VocabularyRule;
+use std::path::{Path, PathBuf};
 
 /// Complete context for rendering an export - all data needed for any format
 #[derive(Debug, Clone)]
@@ -10,6 +10,8 @@ pub struct ExportContext {
     pub meeting: MeetingExportData,
     pub transcript_rows: Vec<TranscriptExportRow>,
     pub speaker_turns: Vec<SpeakerTurnExportRow>,
+    pub action_items: Vec<ActionItemExportRow>,
+    pub decisions: Vec<DecisionExportRow>,
     pub summary_markdown: String,
     pub vocabulary_rules: Vec<VocabularyRule>,
 }
@@ -46,6 +48,21 @@ pub struct SpeakerTurnExportRow {
     pub confidence: f64,
 }
 
+#[derive(Debug, Clone)]
+pub struct ActionItemExportRow {
+    pub title: String,
+    pub owner_display_name: Option<String>,
+    pub due_date: Option<String>,
+    pub status: String,
+    pub source_excerpt: Option<String>,
+}
+
+#[derive(Debug, Clone)]
+pub struct DecisionExportRow {
+    pub title: String,
+    pub source_excerpt: Option<String>,
+}
+
 /// Fetch all data needed for export rendering
 pub async fn collect_export_context(
     pool: &sqlx::SqlitePool,
@@ -58,6 +75,8 @@ pub async fn collect_export_context(
     let summary_markdown = fetch_summary_markdown(pool, meeting_id).await?;
     let transcript_rows = fetch_transcript_rows(pool, meeting_id).await?;
     let speaker_turns = fetch_speaker_turns(pool, meeting_id).await?;
+    let action_items = fetch_action_items(pool, meeting_id).await?;
+    let decisions = fetch_decisions(pool, meeting_id).await?;
     let vocabulary_rules =
         crate::vocabulary::get_effective_rules_for_meeting(pool, Some(meeting_id)).await?;
 
@@ -65,6 +84,8 @@ pub async fn collect_export_context(
         meeting,
         transcript_rows,
         speaker_turns,
+        action_items,
+        decisions,
         summary_markdown,
         vocabulary_rules,
     })
@@ -128,13 +149,15 @@ pub async fn fetch_transcript_rows(
 
     Ok(rows
         .into_iter()
-        .map(|(id, timestamp, text, audio_start_time, audio_end_time)| TranscriptExportRow { 
-            id,
-            timestamp, 
-            text,
-            audio_start_time,
-            audio_end_time,
-        })
+        .map(
+            |(id, timestamp, text, audio_start_time, audio_end_time)| TranscriptExportRow {
+                id,
+                timestamp,
+                text,
+                audio_start_time,
+                audio_end_time,
+            },
+        )
         .collect())
 }
 
@@ -144,10 +167,18 @@ pub async fn fetch_speaker_turns(
     meeting_id: &str,
 ) -> Result<Vec<SpeakerTurnExportRow>, String> {
     let rows = sqlx::query_as::<_, (i32, Option<String>, i64, i64, String, f64)>(
-        "SELECT speaker_number, speaker_name, start_ms, end_ms, text, confidence
-         FROM speaker_turns
-         WHERE meeting_id = ?
-         ORDER BY start_ms ASC",
+        "SELECT
+            st.speaker_number,
+            COALESCE(ms.display_name_override, si.display_name, st.speaker_name) AS speaker_name,
+            st.start_ms,
+            st.end_ms,
+            st.text,
+            st.confidence
+         FROM speaker_turns st
+         LEFT JOIN meeting_speakers ms ON ms.id = st.meeting_speaker_id
+         LEFT JOIN speaker_identities si ON si.id = ms.speaker_identity_id
+         WHERE st.meeting_id = ?
+         ORDER BY st.start_ms ASC",
     )
     .bind(meeting_id)
     .fetch_all(pool)
@@ -156,15 +187,81 @@ pub async fn fetch_speaker_turns(
 
     Ok(rows
         .into_iter()
-        .map(|(speaker_number, speaker_name, start_ms, end_ms, text, confidence)| {
-            SpeakerTurnExportRow {
-                speaker_number,
-                speaker_name,
-                start_ms,
-                end_ms,
-                text,
-                confidence,
-            }
+        .map(
+            |(speaker_number, speaker_name, start_ms, end_ms, text, confidence)| {
+                SpeakerTurnExportRow {
+                    speaker_number,
+                    speaker_name,
+                    start_ms,
+                    end_ms,
+                    text,
+                    confidence,
+                }
+            },
+        )
+        .collect())
+}
+
+pub async fn fetch_action_items(
+    pool: &sqlx::SqlitePool,
+    meeting_id: &str,
+) -> Result<Vec<ActionItemExportRow>, String> {
+    let rows = sqlx::query_as::<
+        _,
+        (
+            String,
+            Option<String>,
+            Option<String>,
+            String,
+            Option<String>,
+        ),
+    >(
+        "SELECT title, owner_display_name, due_date, status, source_excerpt
+         FROM action_items
+         WHERE meeting_id = ?
+           AND review_status != 'rejected'
+         ORDER BY created_at ASC, title ASC",
+    )
+    .bind(meeting_id)
+    .fetch_all(pool)
+    .await
+    .map_err(|e| format!("Failed to fetch action items for export: {}", e))?;
+
+    Ok(rows
+        .into_iter()
+        .map(
+            |(title, owner_display_name, due_date, status, source_excerpt)| ActionItemExportRow {
+                title,
+                owner_display_name,
+                due_date,
+                status,
+                source_excerpt,
+            },
+        )
+        .collect())
+}
+
+pub async fn fetch_decisions(
+    pool: &sqlx::SqlitePool,
+    meeting_id: &str,
+) -> Result<Vec<DecisionExportRow>, String> {
+    let rows = sqlx::query_as::<_, (String, Option<String>)>(
+        "SELECT title, source_excerpt
+         FROM decisions
+         WHERE meeting_id = ?
+           AND review_status != 'rejected'
+         ORDER BY created_at ASC, title ASC",
+    )
+    .bind(meeting_id)
+    .fetch_all(pool)
+    .await
+    .map_err(|e| format!("Failed to fetch decisions for export: {}", e))?;
+
+    Ok(rows
+        .into_iter()
+        .map(|(title, source_excerpt)| DecisionExportRow {
+            title,
+            source_excerpt,
         })
         .collect())
 }
@@ -303,6 +400,112 @@ pub fn empty_section_fallback(section: &str, fallback: &str) -> String {
     }
 }
 
+pub fn split_summary_markdown_sections(summary_markdown: &str) -> (String, String, String) {
+    let trimmed = summary_markdown.trim();
+    if trimmed.is_empty() {
+        return (String::new(), String::new(), String::new());
+    }
+
+    let mut action_items = String::new();
+    let mut decisions = String::new();
+    let mut summary_lines = Vec::<String>::new();
+    let mut current_section = "summary";
+
+    for line in trimmed.lines() {
+        let heading = parse_markdown_heading(line);
+        if let Some(heading_text) = heading {
+            let normalized = normalize_heading(&heading_text);
+            if normalized.contains("action item") {
+                current_section = "action";
+                continue;
+            }
+            if normalized == "decisions"
+                || normalized == "key decisions"
+                || normalized.contains(" decision")
+            {
+                current_section = "decisions";
+                continue;
+            }
+            current_section = "summary";
+            summary_lines.push(line.to_string());
+            continue;
+        }
+
+        match current_section {
+            "action" => {
+                if !action_items.is_empty() {
+                    action_items.push('\n');
+                }
+                action_items.push_str(line);
+            }
+            "decisions" => {
+                if !decisions.is_empty() {
+                    decisions.push('\n');
+                }
+                decisions.push_str(line);
+            }
+            _ => summary_lines.push(line.to_string()),
+        }
+    }
+
+    if action_items.trim().is_empty() && decisions.trim().is_empty() {
+        return (trimmed.to_string(), String::new(), String::new());
+    }
+
+    (
+        summary_lines.join("\n").trim().to_string(),
+        action_items.trim().to_string(),
+        decisions.trim().to_string(),
+    )
+}
+
+pub fn render_action_items_markdown(action_items: &[ActionItemExportRow]) -> String {
+    action_items
+        .iter()
+        .map(|item| {
+            let checkbox = if item.status == "completed" {
+                "[x]"
+            } else {
+                "[ ]"
+            };
+            let mut line = format!("- {} {}", checkbox, item.title);
+            if let Some(owner) = &item.owner_display_name {
+                if !owner.trim().is_empty() {
+                    line.push_str(&format!(" [owner:: {}]", owner.trim()));
+                }
+            }
+            if let Some(due_date) = &item.due_date {
+                if !due_date.trim().is_empty() {
+                    line.push_str(&format!(" [due:: {}]", due_date.trim()));
+                }
+            }
+            if let Some(excerpt) = &item.source_excerpt {
+                if !excerpt.trim().is_empty() {
+                    line.push_str(&format!("\n  > {}", excerpt.trim()));
+                }
+            }
+            line
+        })
+        .collect::<Vec<_>>()
+        .join("\n")
+}
+
+pub fn render_decisions_markdown(decisions: &[DecisionExportRow]) -> String {
+    decisions
+        .iter()
+        .map(|decision| {
+            let mut line = format!("- {}", decision.title);
+            if let Some(excerpt) = &decision.source_excerpt {
+                if !excerpt.trim().is_empty() {
+                    line.push_str(&format!("\n  > {}", excerpt.trim()));
+                }
+            }
+            line
+        })
+        .collect::<Vec<_>>()
+        .join("\n")
+}
+
 /// Format transcript with speaker labels if diarization is available
 pub fn format_transcript_with_speakers(
     transcript_rows: &[TranscriptExportRow],
@@ -314,7 +517,8 @@ pub fn format_transcript_with_speakers(
         return transcript_rows
             .iter()
             .map(|row| {
-                let corrected = crate::vocabulary::apply_vocabulary_rules(&row.text, vocabulary_rules);
+                let corrected =
+                    crate::vocabulary::apply_vocabulary_rules(&row.text, vocabulary_rules);
                 format!("- **{}** {}", row.timestamp, corrected)
             })
             .collect();
@@ -322,30 +526,35 @@ pub fn format_transcript_with_speakers(
 
     // Diarization available - map transcripts to speakers
     let mut formatted_lines = Vec::new();
-    
+
     for row in transcript_rows {
         let row_start_ms = row.audio_start_time as i64;
         let row_end_ms = row.audio_end_time as i64;
-        
+
         // Find overlapping speaker turn
         let speaker_turn = speaker_turns.iter().find(|turn| {
             // Check if transcript segment overlaps with speaker turn
             turn.start_ms <= row_end_ms && turn.end_ms >= row_start_ms
         });
-        
+
         let corrected = crate::vocabulary::apply_vocabulary_rules(&row.text, vocabulary_rules);
-        
+
         if let Some(turn) = speaker_turn {
-            let speaker_label = turn.speaker_name.clone()
+            let speaker_label = turn
+                .speaker_name
+                .clone()
                 .unwrap_or_else(|| format!("Speaker {}", turn.speaker_number));
-            
-            formatted_lines.push(format!("- **{}** {}: {}", row.timestamp, speaker_label, corrected));
+
+            formatted_lines.push(format!(
+                "- **{}** {}: {}",
+                row.timestamp, speaker_label, corrected
+            ));
         } else {
             // No speaker found for this segment
             formatted_lines.push(format!("- **{}** {}", row.timestamp, corrected));
         }
     }
-    
+
     formatted_lines
 }
 
@@ -369,8 +578,14 @@ mod tests {
 
     #[test]
     fn test_parse_markdown_heading() {
-        assert_eq!(parse_markdown_heading("## Section"), Some("Section".to_string()));
-        assert_eq!(parse_markdown_heading("### Subsection"), Some("Subsection".to_string()));
+        assert_eq!(
+            parse_markdown_heading("## Section"),
+            Some("Section".to_string())
+        );
+        assert_eq!(
+            parse_markdown_heading("### Subsection"),
+            Some("Subsection".to_string())
+        );
         assert_eq!(parse_markdown_heading("Not a heading"), None);
         assert_eq!(parse_markdown_heading("##"), None);
     }

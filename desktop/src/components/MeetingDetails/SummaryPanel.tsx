@@ -11,8 +11,10 @@ import { SumUpd } from './SummaryUpdaterButtonGroup';
 import { type SummaryPayload } from '@/contracts/summaryContract';
 import { type ExportFormat } from '@/types/export';
 import type { SumSt } from '@/hooks/meeting-details/sumMsg';
+import { StructuredReviewPanel } from './StructuredReviewPanel';
 
 interface PanPrp {
+  meetingId: string;
   isTitleDirty: boolean;
   sumRef: RefObject<BlockNoteSummaryViewRef>;
   isSaving: boolean;
@@ -41,6 +43,7 @@ interface PanPrp {
 }
 
 export function SumPan({
+  meetingId,
   isTitleDirty,
   sumRef,
   isSaving,
@@ -226,6 +229,10 @@ export function SumPan({
       ) : (
         <div className="min-h-0 flex-1 overflow-y-auto">
           <div className="w-full p-6">
+            <StructuredReviewPanel
+              meetingId={meetingId}
+              refreshSignal={`${sumSt}:${aiSum.markdown.length}`}
+            />
             <BlockNoteSummaryView
               ref={sumRef}
               summaryData={aiSum}

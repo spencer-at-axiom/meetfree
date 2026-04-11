@@ -182,6 +182,7 @@ impl ProfessionalAudioMixer {
 
             // Sum without ducking - mic stays at full volume, system slightly reduced
             let sum = mic + sys_scaled;
+            let sum_abs = sum.abs();
 
             // Soft scaling avoids clipping artifacts when the mixed signal exceeds ±1.0.            let sum_abs = sum.abs();
             let mixed_sample = if sum_abs > 1.0 {
@@ -426,6 +427,7 @@ impl AudioCapture {
         };
 
         // Resample to 48 kHz when the device reports a different sample rate.
+        const TARGET_SAMPLE_RATE: u32 = 48000;
         // Buffering keeps the resampler stable across variable chunk sizes.        const TARGET_SAMPLE_RATE: u32 = 48000;
         if self.needs_resampling {
             let before_len = mono_data.len();

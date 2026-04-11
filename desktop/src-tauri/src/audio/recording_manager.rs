@@ -1,4 +1,4 @@
-﻿use anyhow::Result;
+use anyhow::Result;
 use log::{debug, error, info, warn};
 use std::sync::Arc;
 use tokio::sync::mpsc;
@@ -672,7 +672,10 @@ impl RecordingManager {
         device_name: String,
         device_type: DeviceMonitorType,
     ) -> Result<()> {
-        info!("ðŸ“± Device reconnected: {} ({:?})", device_name, device_type);
+        info!(
+            "ðŸ“± Device reconnected: {} ({:?})",
+            device_name, device_type
+        );
 
         // Attempt to reconnect the device
         match self

@@ -757,7 +757,6 @@ pub fn write_transcript_json_to_file(
     Ok(file_path.to_string_lossy().to_string())
 }
 
-
 #[cfg(test)]
 mod tests {
     use super::*;

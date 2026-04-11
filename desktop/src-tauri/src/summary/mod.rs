@@ -46,10 +46,15 @@ pub struct CustomOpenAIConfigView {
 
 pub mod commands;
 pub mod contract;
+pub mod decision_action_linking;
+pub mod extraction_heuristics;
 pub mod llm_client;
+pub mod owner_linking;
 pub mod processor;
+pub mod provenance;
 pub mod service;
 pub mod streaming;
+pub mod structured_artifacts;
 pub mod template_commands;
 pub mod templates;
 pub mod token_counter;

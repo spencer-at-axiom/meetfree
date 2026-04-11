@@ -162,19 +162,27 @@ impl SystemAudioCapture {
             let wasapi_host = cpal::host_from_id(cpal::HostId::Wasapi)
                 .map_err(|e| anyhow!("Failed to initialize WASAPI host: {}", e))?;
 
-            let preferred_output_name = preferred_output_device_name
-                .map(str::to_string)
-                .or_else(|| wasapi_host.default_output_device().and_then(|d| d.name().ok()));
+            let preferred_output_name =
+                preferred_output_device_name
+                    .map(str::to_string)
+                    .or_else(|| {
+                        wasapi_host
+                            .default_output_device()
+                            .and_then(|d| d.name().ok())
+                    });
 
-            let (device, resolved_name) =
-                select_windows_loopback_input_device(&wasapi_host, preferred_output_name.as_deref())?;
+            let (device, resolved_name) = select_windows_loopback_input_device(
+                &wasapi_host,
+                preferred_output_name.as_deref(),
+            )?;
 
             let config = select_supported_input_config(&device)
                 .with_context(|| format!("Failed to find input config for '{}'", resolved_name))?;
 
             let (tx, rx) = mpsc::unbounded::<Vec<f32>>();
-            let stream = build_loopback_input_stream(&device, &config, tx)
-                .with_context(|| format!("Failed to build loopback stream for '{}'", resolved_name))?;
+            let stream = build_loopback_input_stream(&device, &config, tx).with_context(|| {
+                format!("Failed to build loopback stream for '{}'", resolved_name)
+            })?;
             stream.play().map_err(|e| {
                 anyhow!(
                     "Failed to start loopback stream for '{}': {}",
@@ -207,8 +215,9 @@ impl SystemAudioCapture {
                 .with_context(|| format!("Failed to find input config for '{}'", resolved_name))?;
 
             let (tx, rx) = mpsc::unbounded::<Vec<f32>>();
-            let stream = build_loopback_input_stream(&device, &config, tx)
-                .with_context(|| format!("Failed to build monitor stream for '{}'", resolved_name))?;
+            let stream = build_loopback_input_stream(&device, &config, tx).with_context(|| {
+                format!("Failed to build monitor stream for '{}'", resolved_name)
+            })?;
             stream.play().map_err(|e| {
                 anyhow!(
                     "Failed to start monitor stream for '{}': {}",
@@ -547,8 +556,10 @@ fn build_loopback_input_stream(
                 &cfg,
                 move |data: &[u16], _| {
                     let midpoint = u16::MAX as f32 / 2.0;
-                    let samples: Vec<f32> =
-                        data.iter().map(|sample| (*sample as f32 - midpoint) / midpoint).collect();
+                    let samples: Vec<f32> = data
+                        .iter()
+                        .map(|sample| (*sample as f32 - midpoint) / midpoint)
+                        .collect();
                     let _ = tx.unbounded_send(samples);
                 },
                 err_cb,
@@ -576,8 +587,10 @@ fn build_loopback_input_stream(
                 &cfg,
                 move |data: &[u8], _| {
                     let midpoint = u8::MAX as f32 / 2.0;
-                    let samples: Vec<f32> =
-                        data.iter().map(|sample| (*sample as f32 - midpoint) / midpoint).collect();
+                    let samples: Vec<f32> = data
+                        .iter()
+                        .map(|sample| (*sample as f32 - midpoint) / midpoint)
+                        .collect();
                     let _ = tx.unbounded_send(samples);
                 },
                 err_cb,
@@ -605,8 +618,10 @@ fn build_loopback_input_stream(
                 &cfg,
                 move |data: &[u32], _| {
                     let midpoint = u32::MAX as f32 / 2.0;
-                    let samples: Vec<f32> =
-                        data.iter().map(|sample| (*sample as f32 - midpoint) / midpoint).collect();
+                    let samples: Vec<f32> = data
+                        .iter()
+                        .map(|sample| (*sample as f32 - midpoint) / midpoint)
+                        .collect();
                     let _ = tx.unbounded_send(samples);
                 },
                 err_cb,
@@ -639,7 +654,8 @@ mod tests {
     #[cfg(target_os = "linux")]
     #[test]
     fn linux_monitor_scoring_prefers_monitor_sources() {
-        let monitor = score_linux_monitor_source("alsa_output.pci-0000_00_1f.3.analog-stereo.monitor", None);
+        let monitor =
+            score_linux_monitor_source("alsa_output.pci-0000_00_1f.3.analog-stereo.monitor", None);
         let plain = score_linux_monitor_source("Built-in Microphone", None);
         assert!(monitor > plain);
     }

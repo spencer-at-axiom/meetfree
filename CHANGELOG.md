@@ -9,6 +9,54 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 No unreleased changes.
 
+## [0.4.0] - 2026-04-11
+
+### Added
+- Structured meeting-intelligence storage for `speaker_identities`, `voice_profiles`, `meeting_speakers`, `action_items`, and `decisions`
+- Summary-to-structured persistence for action items and decisions, including transcript-backed provenance where evidence is found
+- Reusable speaker identity workflows for create, link, unlink, local rename, inspect, and merge
+- Summary-tab review UI for meeting speakers, action items, and decisions
+- Explicit `accept`, `reject`, and `needs review` review-state actions plus inline provenance evidence in the structured review panel
+- Identity inspector UI for editing identity details and managing voice-profile metadata
+- Lightweight speaker-identity browsing polish with search, sort, quick-open navigation, and visible usage counts
+- Voice-profile CRUD commands and UI for manual profile records
+- Structured export assembly that prefers canonical action-item and decision rows
+- Decision-to-action-item relationship linking after persistence
+- Targeted backend and frontend test coverage for the new review and identity workflows
+
+### Changed
+- Meeting speakers are now stable review records that survive diarization reruns
+- Summary regeneration preserves reviewed action items and decisions instead of replacing them blindly
+- Structured extraction now prefers BlockNote structure first and only accepts heuristic additions when transcript evidence is strong enough
+- Export paths prefer structured entities while remaining compatible with legacy meetings
+- Identity inspection now includes editable voice-profile records
+- Speaker identity detail inspection now uses a static export-compatible route
+
+### Fixed
+- Reviewed speaker names are preserved across diarization reruns
+- Reviewed action items and decisions are preserved across summary regeneration
+- Identity notes can be truly cleared instead of persisting ambiguous empty-string state
+- Transcript provenance tokenization keeps meaningful short technical terms such as `AI`, `UI`, `QA`, `DB`, and `API`
+- Merge dialog copy and identity review tests were tightened to avoid false confidence from brittle assertions
+
+### Migration Notes
+- **Backward Compatible**: All v0.3.0 meetings continue to work without modification
+- **Automatic Migrations**: Database schema migrations run automatically on first launch
+- **No Data Loss**: All existing meetings, transcripts, and speaker turns are preserved
+- **Opt-In Extraction**: Structured entities are created when you regenerate a summary on existing meetings
+
+### Known Limitations
+- Extraction is more evidence-driven than earlier iterations, but still rule-based rather than model-native structured extraction
+- Voice profiles are manual metadata records in `0.4.0`; automatic acoustic training and matching remain deferred
+- Identity merge is one-way (source -> target, cannot undo)
+
+### Deferred to Future Releases
+- Voice profile training and acoustic matching (planned for v0.5.0+)
+- Cross-meeting semantic retrieval (planned for v0.5.0+)
+- In-meeting copilot UI (planned for v0.5.0+)
+- Advanced filtering and search over extracted entities (planned for v0.5.0+)
+- Bulk operations on identities and action items (planned for v0.5.0+)
+
 ## [0.3.0] - 2026-04-07
 
 ### Added
@@ -63,7 +111,7 @@ No unreleased changes.
 - **Desktop Application**: Tauri 2 + Next.js 14 + React 18 architecture
 - **Audio Recording**: Microphone capture on all platforms (Windows, macOS, Linux)
 - **System Audio Capture**: macOS only via Core Audio tap
-- **Local Transcription**: 
+- **Local Transcription**:
   - Whisper models with GPU acceleration (Metal, CUDA, Vulkan, HipBLAS)
   - Parakeet ONNX models for fast transcription
   - Parallel processing with adaptive worker management
@@ -137,6 +185,7 @@ Potential features for consideration in future releases:
 
 ## Version History
 
+- **0.4.0** (2026-04-11): Structured meeting intelligence, speaker identities, review workflows, and manual voice-profile management
 - **0.3.0** (2026-04-07): PDF/DOCX export, speaker diarization
 - **0.2.0** (2026-01-04): FTS5 search, vocabulary rules, metadata enhancements
 - **0.1.0** (2025-09-16): Initial release with core recording, transcription, and summary features

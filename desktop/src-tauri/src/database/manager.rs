@@ -224,6 +224,11 @@ mod tests {
             "settings",
             "transcript_settings",
             "vocabulary_entries",
+            "speaker_identities",
+            "voice_profiles",
+            "meeting_speakers",
+            "action_items",
+            "decisions",
             "speaker_turns",
             "transcripts_fts",
         ];
@@ -262,6 +267,15 @@ mod tests {
         assert!(!transcript_columns.contains(&"summary".to_string()));
         assert!(!transcript_columns.contains(&"action_items".to_string()));
         assert!(!transcript_columns.contains(&"key_points".to_string()));
+
+        let speaker_turn_columns = sqlx::query("PRAGMA table_info(speaker_turns)")
+            .fetch_all(&pool)
+            .await
+            .expect("failed to read speaker_turns columns")
+            .into_iter()
+            .map(|row| row.get::<String, _>("name"))
+            .collect::<Vec<_>>();
+        assert!(speaker_turn_columns.contains(&"meeting_speaker_id".to_string()));
 
         let settings_columns = sqlx::query("PRAGMA table_info(settings)")
             .fetch_all(&pool)

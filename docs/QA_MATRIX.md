@@ -1,6 +1,6 @@
 # QA Matrix
 
-This matrix covers the highest-risk desktop regression workflows, verified against the current codebase on April 10, 2026.
+This matrix covers the highest-risk desktop regression workflows, verified against the current codebase on April 11, 2026.
 
 ## Verification Snapshot
 
@@ -14,6 +14,8 @@ This matrix covers the highest-risk desktop regression workflows, verified again
 | 6 | Selected system audio source disconnected | Verified in code | Readiness validates the saved system-audio device and blocks recording when the selected source is unavailable. |
 | 7 | Reload during recording | Verified in code | Recording state re-syncs from the backend on mount and resumes polling when a recording is already active. |
 | 8 | IndexedDB recovery | Verified in code | Recovery detection, transcript preview, recovery save path, optional audio checkpoint recovery, and cleanup are implemented. |
+| 9 | Structured review workflow | Verified in code and targeted UI tests | Summary-tab review supports meeting speakers, action items, and decisions with explicit review-state actions and inline provenance evidence. |
+| 10 | Speaker identity inspection | Verified in code and targeted UI tests | Identity browser supports search, sort, quick-open inspection, grouped action-item review, and manual voice-profile CRUD. |
 
 ## Release-Blocking Regression Smoke Tests
 
@@ -156,14 +158,54 @@ This matrix covers the highest-risk desktop regression workflows, verified again
   3. Verify the app only finalizes once.
 - Expected:
   - Only one meeting finalization result is processed.
-  - The app does not produce duplicate navigation, duplicate success toasts, or duplicate meeting refreshes.
+- The app does not produce duplicate navigation, duplicate success toasts, or duplicate meeting refreshes.
+
+### 10. Structured Review Persistence
+
+- Goal: Confirm structured review edits persist through refresh-oriented workflows.
+- Setup:
+  - Use a meeting with a generated summary and structured review data.
+- Steps:
+  1. Open the meeting details Summary tab.
+  2. Rename one meeting speaker locally and save it.
+  3. Edit one action item title or owner and save it.
+  4. Edit one decision title and save it.
+  5. Refresh the page or reload the meeting details route.
+- Expected:
+  - Saved speaker, action item, and decision edits remain visible after reload.
+  - Review badges remain consistent with the saved state.
+  - Transcript-backed items show source evidence before acceptance.
+  - Weak-evidence items are visibly distinguishable and easy to reject or keep under review.
+
+### 11. Speaker Identity Inspection and Voice Profiles
+
+- Goal: Confirm speaker identity editing and voice-profile metadata workflows work end to end.
+- Setup:
+  - Use an identity with at least one linked meeting speaker.
+- Steps:
+  1. Open the speaker identities route.
+  2. Search or sort the identity list.
+  3. Open one identity detail page from the list or a quick-open link.
+  4. Edit the identity name or notes and save.
+  5. Add a voice profile with provider, model version, sample count, and payload or notes.
+  6. Edit that voice profile and save again.
+  7. Delete the voice profile.
+- Expected:
+  - Search and sort make it easy to find the target identity.
+  - Identity updates persist after reload.
+  - Voice profile create, update, and delete actions succeed and refresh the inspector state correctly.
 
 ## Sign-Off Rule
 
 - Automated gates must pass through the repo smoke scripts:
-  - Windows PowerShell: `pwsh -File scripts/release-smoke.ps1`
+  - Windows PowerShell: `powershell -ExecutionPolicy Bypass -File scripts/release-smoke.ps1`
   - macOS/Linux shell: `bash scripts/release-smoke.sh`
-- Manual sign-off requires all seven release-blocking smoke tests above to pass on the target release build.
+- Manual sign-off requires the recording smoke tests above plus the structured-review and identity-inspection checks to pass on the target release build.
+
+Current environment note:
+
+- `cargo check -p meetfree --lib` is currently green.
+- `cargo test -p meetfree --lib` is currently green.
 
 ## Priority Action Checklist
 

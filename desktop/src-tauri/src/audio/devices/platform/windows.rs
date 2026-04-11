@@ -262,7 +262,13 @@ fn score_loopback_candidate(name: &str, preferred_output: Option<&str>) -> i32 {
     let normalized = normalize_device_name(name);
     let mut score = 0;
 
-    let loopback_markers = ["stereo mix", "what u hear", "loopback", "wave out", "monitor"];
+    let loopback_markers = [
+        "stereo mix",
+        "what u hear",
+        "loopback",
+        "wave out",
+        "monitor",
+    ];
     if loopback_markers
         .iter()
         .any(|marker| normalized.contains(marker))

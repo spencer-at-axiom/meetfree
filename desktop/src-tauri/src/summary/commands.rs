@@ -6,6 +6,7 @@ use crate::summary::contract::{
     validate_and_normalize_summary_payload, validate_summary_payload_value,
 };
 use crate::summary::service::{SummaryJobRequest, SummaryService};
+use crate::summary::structured_artifacts::sync_structured_artifacts_from_summary_payload;
 use log::{error as log_error, info as log_info, warn as log_warn};
 use serde::{Deserialize, Serialize};
 use tauri::{AppHandle, Runtime};
@@ -57,10 +58,35 @@ pub async fn api_save_meeting_summary<R: Runtime>(
         }
     };
 
+    let normalized_payload = match validate_summary_payload_value(&normalized_summary) {
+        Ok(payload) => payload,
+        Err(error) => {
+            log_warn!(
+                "Normalized summary payload failed validation for meeting_id {}: {}",
+                meeting_id,
+                error.message
+            );
+            return Err(error.to_json_value());
+        }
+    };
+
     match SummaryProcessesRepository::update_meeting_summary(pool, &meeting_id, &normalized_summary)
         .await
     {
         Ok(true) => {
+            if let Err(error) = sync_structured_artifacts_from_summary_payload(
+                pool,
+                &meeting_id,
+                &normalized_payload,
+            )
+            .await
+            {
+                log_warn!(
+                    "Structured artifact sync failed for meeting_id {}: {}",
+                    meeting_id,
+                    error
+                );
+            }
             log_info!("Summary saved successfully for meeting_id: {}", meeting_id);
             Ok(serde_json::json!({
                 "message": "Meeting summary saved successfully"

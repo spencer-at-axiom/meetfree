@@ -87,39 +87,26 @@ pub async fn get_recording_readiness<R: Runtime>(
         .unwrap_or_default();
 
     // Check transcript configuration
-    let (provider, model, model_ready) = match crate::api::api_get_transcript_config(
-        app.clone(),
-        app.clone().state(),
-        None,
-    )
-    .await
-    {
-        Ok(Some(config)) => {
-            info!(
-                "📝 Transcript config - provider: {}, model: {}",
-                config.provider, config.model
-            );
-            (config.provider, config.model, true)
-        }
-        Ok(None) => {
-            warn!("⚠️ No transcript config found");
-            issues.push("No transcription model configured".to_string());
-            (
-                "parakeet".to_string(),
-                "unknown".to_string(),
-                false,
-            )
-        }
-        Err(e) => {
-            warn!("❌ Failed to get transcript config: {}", e);
-            issues.push(format!("Configuration error: {}", e));
-            (
-                "unknown".to_string(),
-                "unknown".to_string(),
-                false,
-            )
-        }
-    };
+    let (provider, model, model_ready) =
+        match crate::api::api_get_transcript_config(app.clone(), app.clone().state(), None).await {
+            Ok(Some(config)) => {
+                info!(
+                    "📝 Transcript config - provider: {}, model: {}",
+                    config.provider, config.model
+                );
+                (config.provider, config.model, true)
+            }
+            Ok(None) => {
+                warn!("⚠️ No transcript config found");
+                issues.push("No transcription model configured".to_string());
+                ("parakeet".to_string(), "unknown".to_string(), false)
+            }
+            Err(e) => {
+                warn!("❌ Failed to get transcript config: {}", e);
+                issues.push(format!("Configuration error: {}", e));
+                ("unknown".to_string(), "unknown".to_string(), false)
+            }
+        };
 
     // Validate model readiness
     let model_status = if model_ready {
@@ -130,7 +117,7 @@ pub async fn get_recording_readiness<R: Runtime>(
             }
             Err(e) => {
                 warn!("❌ Model validation failed: {}", e);
-                
+
                 // Check if it's a download-in-progress error
                 if e.to_lowercase().contains("download") {
                     issues.push("Transcription model is downloading".to_string());
@@ -149,21 +136,25 @@ pub async fn get_recording_readiness<R: Runtime>(
     let system_audio_selected = preferences.preferred_system_device.is_some();
 
     // Check microphone availability using selected device or default
-    let (has_microphone, mic_device) = if let Some(selected_mic) = &preferences.preferred_mic_device {
+    let (has_microphone, mic_device) = if let Some(selected_mic) = &preferences.preferred_mic_device
+    {
         // Validate the selected microphone device
-        match super::device_validation::validate_audio_devices(
-            Some(selected_mic.as_str()),
-            None,
-        )
-        .await
+        match super::device_validation::validate_audio_devices(Some(selected_mic.as_str()), None)
+            .await
         {
             Ok(()) => {
                 info!("🎤 Selected microphone available: {}", selected_mic);
                 (true, Some(selected_mic.clone()))
             }
             Err(e) => {
-                warn!("❌ Selected microphone '{}' not available: {}", selected_mic, e);
-                issues.push(format!("Selected microphone '{}' is not available", selected_mic));
+                warn!(
+                    "❌ Selected microphone '{}' not available: {}",
+                    selected_mic, e
+                );
+                issues.push(format!(
+                    "Selected microphone '{}' is not available",
+                    selected_mic
+                ));
                 (false, Some(selected_mic.clone()))
             }
         }
@@ -198,8 +189,14 @@ pub async fn get_recording_readiness<R: Runtime>(
                     (true, Some(selected_system.clone()))
                 }
                 Err(e) => {
-                    warn!("❌ Selected system audio '{}' not available: {}", selected_system, e);
-                    issues.push(format!("Selected system audio device '{}' is not available", selected_system));
+                    warn!(
+                        "❌ Selected system audio '{}' not available: {}",
+                        selected_system, e
+                    );
+                    issues.push(format!(
+                        "Selected system audio device '{}' is not available",
+                        selected_system
+                    ));
                     (false, Some(selected_system.clone()))
                 }
             }
@@ -225,7 +222,10 @@ pub async fn get_recording_readiness<R: Runtime>(
         }
         info!(
             "ℹ️ System audio not supported on this platform: {}",
-            system_audio_limitation.reason.as_ref().unwrap_or(&"Unknown reason".to_string())
+            system_audio_limitation
+                .reason
+                .as_ref()
+                .unwrap_or(&"Unknown reason".to_string())
         );
         (false, None)
     };
@@ -233,8 +233,8 @@ pub async fn get_recording_readiness<R: Runtime>(
     platform_limitations.push(system_audio_limitation.clone());
 
     // Determine overall status
-    let system_audio_blocked = system_audio_selected
-        && (!system_audio_limitation.available || !has_system_audio);
+    let system_audio_blocked =
+        system_audio_selected && (!system_audio_limitation.available || !has_system_audio);
 
     let final_status = if !has_microphone {
         ReadinessStatus::MissingMicrophone

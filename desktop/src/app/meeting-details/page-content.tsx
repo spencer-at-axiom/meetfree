@@ -305,6 +305,7 @@ export default function PageContent({
 
           <TabsContent value="summary" className="m-0 h-full">
             <SumTab
+              meetingId={meeting.id}
               isTitleDirty={meetingData.isTitleDirty}
               sumRef={meetingData.blockNoteSummaryRef}
               isSaving={meetingData.isSaving}

@@ -8,6 +8,7 @@ use crate::summary::processor::{
     extract_meeting_name_from_markdown, generate_meeting_summary, ResolvedProviderConfig,
     SummaryGenerationOptions, SummaryJob,
 };
+use crate::summary::structured_artifacts::sync_structured_artifacts_from_markdown;
 use once_cell::sync::Lazy;
 use sqlx::SqlitePool;
 use std::collections::HashMap;
@@ -138,9 +139,7 @@ impl SummaryService {
 
         let provider: LLMProvider = model_provider.parse()?;
 
-        let api_key = if provider == LLMProvider::Ollama
-            || provider == LLMProvider::CustomOpenAI
-        {
+        let api_key = if provider == LLMProvider::Ollama || provider == LLMProvider::CustomOpenAI {
             String::new()
         } else {
             match SettingsRepository::get_api_key(pool, &model_provider).await {
@@ -332,7 +331,7 @@ impl SummaryService {
                     }
                 }
 
-                let result_json = markdown_payload_value(final_markdown);
+                let result_json = markdown_payload_value(&final_markdown);
                 if let Err(error) = SummaryProcessesRepository::update_process_completed(
                     &pool,
                     &meeting_id,
@@ -347,6 +346,15 @@ impl SummaryService {
                         meeting_id, error
                     );
                 } else {
+                    if let Err(error) =
+                        sync_structured_artifacts_from_markdown(&pool, &meeting_id, &final_markdown)
+                            .await
+                    {
+                        warn!(
+                            "Failed to sync structured artifacts for meeting {}: {}",
+                            meeting_id, error
+                        );
+                    }
                     info!("Summary saved successfully for meeting_id: {}", meeting_id);
                 }
             }

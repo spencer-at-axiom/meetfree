@@ -1,6 +1,5 @@
 use crate::config::{
-    DEFAULT_PARAKEET_MODEL, DEFAULT_SUMMARY_MODEL, DEFAULT_SUMMARY_PROVIDER,
-    DEFAULT_WHISPER_MODEL,
+    DEFAULT_PARAKEET_MODEL, DEFAULT_SUMMARY_MODEL, DEFAULT_SUMMARY_PROVIDER, DEFAULT_WHISPER_MODEL,
 };
 use crate::database::models::{Setting, TranscriptSetting};
 use crate::summary::CustomOpenAIConfig;

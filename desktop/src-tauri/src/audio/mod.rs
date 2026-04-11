@@ -20,6 +20,7 @@ pub mod hardware_detector;
 pub mod import;
 pub mod incremental_saver;
 pub mod level_monitor;
+pub mod permissions;
 pub mod pipeline;
 pub mod playback_monitor;
 pub mod post_processor;
@@ -44,6 +45,7 @@ pub use capture::{
 };
 pub use decoder::{decode_audio_file, DecodedAudio};
 pub use device_detection::{calculate_buffer_timeout, InputDeviceKind};
+pub use device_monitor::{DeviceEvent, DeviceMonitorType};
 pub use devices::{
     default_input_device, default_output_device, get_device_and_config, list_audio_devices,
     parse_audio_device, trigger_audio_permission, AudioDevice, AudioTranscriptionEngine,

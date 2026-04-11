@@ -8,6 +8,7 @@ import type { ExportFormat } from '@/types/export';
 import type { SumSt } from '@/hooks/meeting-details/sumMsg';
 
 interface TabPrp {
+  meetingId: string;
   isTitleDirty: boolean;
   sumRef: any;
   isSaving: boolean;

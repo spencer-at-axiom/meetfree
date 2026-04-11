@@ -3,6 +3,7 @@
 // This file is kept for any external references that may depend on it
 
 pub use crate::export::markdown::{
-    meeting_export_markdown, meetings_export_markdown_batch, export_meeting_markdown,
-    MeetingMarkdownExportResult, MeetingMarkdownBatchExportResult, MeetingsMarkdownBatchExportResponse,
+    export_meeting_markdown, meeting_export_markdown, meetings_export_markdown_batch,
+    MeetingMarkdownBatchExportResult, MeetingMarkdownExportResult,
+    MeetingsMarkdownBatchExportResponse,
 };
