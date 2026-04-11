@@ -79,11 +79,8 @@ jobs:
       - name: Rust cache
         uses: swatinem/rust-cache@v2
 
-      - name: Cargo check
-        run: cargo check -p meetfree --locked
-
-      - name: Cargo lib tests
-        run: cargo test -p meetfree --lib --locked
+      - name: Cargo check (lib + tests)
+        run: cargo check -p meetfree --tests --locked
 
   merge-gate:
     name: Merge Gate
