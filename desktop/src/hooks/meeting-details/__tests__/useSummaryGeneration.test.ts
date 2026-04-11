@@ -16,6 +16,11 @@ const mocks = vi.hoisted(() => ({
   trackSummaryGenerationStarted: vi.fn().mockResolvedValue(undefined),
   trackCustomPromptUsed: vi.fn().mockResolvedValue(undefined),
   trackSummaryGenerationCompleted: vi.fn().mockResolvedValue(undefined),
+  startStreamingSummary: vi.fn(),
+}));
+
+vi.mock('@/services/summaryStreamingService', () => ({
+  startStreamingSummary: mocks.startStreamingSummary,
 }));
 
 vi.mock('@/contexts/MeetingsContext', () => ({
@@ -117,7 +122,7 @@ describe('useSum', () => {
     expect(mocks.toastError).toHaveBeenCalledWith('No transcripts available for summary');
   });
 
-  it('completes summary workflow and updates meeting title on successful polling', async () => {
+  it('completes streaming summary workflow and applies summary from api_get_summary', async () => {
     const payload = createMarkdownSummaryPayload('## Summary\nAll updates completed.');
 
     mocks.invoke.mockImplementation(async (command: string, args: Record<string, unknown>) => {
@@ -129,26 +134,22 @@ describe('useSum', () => {
         return { transcripts: transcriptRows, total_count: 2, has_more: false };
       }
 
-      if (command === 'api_process_transcript') {
-        return { process_id: 'proc-1' };
+      if (command === 'api_get_summary') {
+        return { data: payload };
+      }
+
+      if (command === 'generate_summary_streaming') {
+        return undefined;
       }
 
       throw new Error(`Unexpected command: ${command}`);
     });
 
-    mocks.startSummaryPolling.mockImplementation(
-      (
-        _meetingId: string,
-        _processId: string,
-        callback: (result: { status: string; data?: unknown; meetingName?: string }) => void
-      ) => {
-        void callback({
-          status: 'completed',
-          data: payload,
-          meetingName: 'Sprint Planning Updated',
-        });
-      }
-    );
+    mocks.startStreamingSummary.mockImplementation(async (_meetingId, _template, callbacks) => {
+      await Promise.resolve();
+      await callbacks.onComplete('');
+      return { unlisten: vi.fn() };
+    });
 
     const setAiSummary = vi.fn();
     const updateMeetingTitle = vi.fn();
@@ -164,11 +165,8 @@ describe('useSum', () => {
     await waitFor(() => {
       expect(setAiSummary).toHaveBeenCalledWith(payload);
     });
-    expect(updateMeetingTitle).toHaveBeenCalledWith('Sprint Planning Updated');
-    expect(mocks.toastSuccess).toHaveBeenCalledWith('Summary generated successfully!', {
-      description: 'Your meeting summary is ready',
-      duration: 4000,
-    });
+    expect(mocks.startSummaryPolling).not.toHaveBeenCalled();
+    expect(updateMeetingTitle).not.toHaveBeenCalled();
     expect(result.current.sumSt).toBe('completed');
   });
 

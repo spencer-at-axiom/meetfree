@@ -25,13 +25,26 @@ describe('Global stop shortcut from non-home route', () => {
   });
 
   it('fires onStopRecording on Meta+Shift+R (macOS) from /meetings', () => {
-    renderHook(() => useKeyboardShortcuts({ onStopRecording: stopFn }));
+    const prev = navigator.platform;
+    Object.defineProperty(navigator, 'platform', {
+      configurable: true,
+      value: 'MacIntel',
+    });
 
-    window.dispatchEvent(
-      new KeyboardEvent('keydown', { key: 'R', metaKey: true, shiftKey: true })
-    );
+    try {
+      renderHook(() => useKeyboardShortcuts({ onStopRecording: stopFn }));
 
-    expect(stopFn).toHaveBeenCalledTimes(1);
+      window.dispatchEvent(
+        new KeyboardEvent('keydown', { key: 'R', metaKey: true, shiftKey: true })
+      );
+
+      expect(stopFn).toHaveBeenCalledTimes(1);
+    } finally {
+      Object.defineProperty(navigator, 'platform', {
+        configurable: true,
+        value: prev,
+      });
+    }
   });
 
   it('does not fire when typing in an input field', () => {
