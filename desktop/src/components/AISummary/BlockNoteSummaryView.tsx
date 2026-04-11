@@ -19,7 +19,7 @@ const Editor = dynamic(() => import('../BlockNoteEditor/Editor'), { ssr: false }
 interface BlockNoteSummaryViewProps {
   summaryData: SummaryPayload | null;
   onSave?: (data: SummaryPayload) => void;
-  status?: 'idle' | 'processing' | 'summarizing' | 'regenerating' | 'completed' | 'error';
+  status?: 'idle' | 'processing' | 'summarizing' | 'regenerating' | 'streaming' | 'completed' | 'error';
   error?: string | null;
   onDirtyChange?: (isDirty: boolean) => void;
 }
