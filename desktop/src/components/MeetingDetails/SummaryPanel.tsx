@@ -1,92 +1,91 @@
 "use client";
 
+import { useCallback, useEffect, useRef, useState, type RefObject } from 'react';
+import { toast } from 'sonner';
 import { Transcript } from '@/types';
 import { BlockNoteSummaryView, BlockNoteSummaryViewRef } from '@/components/AISummary/BlockNoteSummaryView';
 import { EmptyStateSummary } from '@/components/EmptyStateSummary';
 import { ModelConfig, ModelSaveOptions } from '@/components/ModelSettingsModal';
-import { SummaryGeneratorButtonGroup } from './SummaryGeneratorButtonGroup';
-import { SummaryUpdaterButtonGroup } from './SummaryUpdaterButtonGroup';
-import { RefObject, useCallback, useEffect, useRef, useState } from 'react';
+import { SumGen } from './SummaryGeneratorButtonGroup';
+import { SumUpd } from './SummaryUpdaterButtonGroup';
 import { type SummaryPayload } from '@/contracts/summaryContract';
 import { type ExportFormat } from '@/types/export';
-import { toast } from 'sonner';
+import type { SumSt } from '@/hooks/meeting-details/sumMsg';
 
-interface SummaryPanelProps {
+interface PanPrp {
   isTitleDirty: boolean;
-  summaryRef: RefObject<BlockNoteSummaryViewRef>;
+  sumRef: RefObject<BlockNoteSummaryViewRef>;
   isSaving: boolean;
   onSaveAll: () => Promise<void>;
   onCopySummary: () => Promise<void>;
-  onExportMarkdown: () => Promise<void>;
-  onExport?: (format: ExportFormat) => Promise<void>;
-  onOpenFolder: () => Promise<void>;
-  aiSummary: SummaryPayload | null;
-  summaryStatus: 'idle' | 'processing' | 'summarizing' | 'regenerating' | 'completed' | 'error';
-  transcripts: Transcript[];
-  modelConfig: ModelConfig;
-  setModelConfig: (config: ModelConfig | ((prev: ModelConfig) => ModelConfig)) => void;
-  onSaveModelConfig: (config?: ModelConfig, options?: ModelSaveOptions) => Promise<void>;
-  onGenerateSummary: (customPrompt: string) => Promise<void>;
-  onStopGeneration: () => void;
-  customPrompt: string;
-  onSaveSummary: (summary: SummaryPayload) => Promise<void>;
+  onMd: () => Promise<void>;
+  onExp?: (format: ExportFormat) => Promise<void>;
+  aiSum: SummaryPayload | null;
+  sumSt: SumSt;
+  rows: Transcript[];
+  cfg: ModelConfig;
+  setCfg: (config: ModelConfig | ((prev: ModelConfig) => ModelConfig)) => void;
+  onSaveCfg: (config?: ModelConfig, options?: ModelSaveOptions) => Promise<void>;
+  onGen: (customPrompt: string) => Promise<void>;
+  onHalt: () => void;
+  prompt: string;
+  onSaveSum: (summary: SummaryPayload) => Promise<void>;
   onDirtyChange: (isDirty: boolean) => void;
-  summaryError: string | null;
-  getSummaryStatusMessage: (status: 'idle' | 'processing' | 'summarizing' | 'regenerating' | 'completed' | 'error') => string;
-  availableTemplates: Array<{ id: string, name: string, description: string }>;
-  selectedTemplate: string;
-  onTemplateSelect: (templateId: string, templateName: string) => void;
-  isModelConfigLoading?: boolean;
-  onOpenModelSettings?: (openFn: () => void) => void;
+  sumErr: string | null;
+  getMsg: (status: SumSt) => string;
+  tpls: Array<{ id: string; name: string; description: string }>;
+  selTpl: string;
+  onTpl: (templateId: string, templateName: string) => void;
+  isCfg?: boolean;
+  onOpen?: (openFn: () => void) => void;
 }
 
-export function SummaryPanel({
+export function SumPan({
   isTitleDirty,
-  summaryRef,
+  sumRef,
   isSaving,
   onSaveAll,
   onCopySummary,
-  onExportMarkdown,
-  onExport,
-  onOpenFolder,
-  aiSummary,
-  summaryStatus,
-  transcripts,
-  modelConfig,
-  setModelConfig,
-  onSaveModelConfig,
-  onGenerateSummary,
-  onStopGeneration,
-  customPrompt,
-  onSaveSummary,
+  onMd,
+  onExp,
+  aiSum,
+  sumSt,
+  rows,
+  cfg,
+  setCfg,
+  onSaveCfg,
+  onGen,
+  onHalt,
+  prompt,
+  onSaveSum,
   onDirtyChange,
-  summaryError,
-  getSummaryStatusMessage,
-  availableTemplates,
-  selectedTemplate,
-  onTemplateSelect,
-  isModelConfigLoading = false,
-  onOpenModelSettings
-}: SummaryPanelProps) {
-  const isSummaryLoading = summaryStatus === 'processing' || summaryStatus === 'summarizing' || summaryStatus === 'regenerating';
-  const [isSearchVisible, setIsSearchVisible] = useState(false);
-  const [searchQuery, setSearchQuery] = useState('');
-  const searchInputRef = useRef<HTMLInputElement>(null);
+  sumErr,
+  getMsg,
+  tpls,
+  selTpl,
+  onTpl,
+  isCfg = false,
+  onOpen,
+}: PanPrp) {
+  const isLoad = sumSt === 'processing' || sumSt === 'summarizing' || sumSt === 'regenerating';
+  const [isFind, setFind] = useState(false);
+  const [query, setQuery] = useState('');
+  const inpRef = useRef<HTMLInputElement>(null);
 
   useEffect(() => {
-    if (isSearchVisible) {
-      searchInputRef.current?.focus();
-      searchInputRef.current?.select();
+    if (isFind) {
+      inpRef.current?.focus();
+      inpRef.current?.select();
     }
-  }, [isSearchVisible]);
+  }, [isFind]);
 
-  const runSearch = useCallback(() => {
-    const query = searchQuery.trim();
-    if (!query) {
+  const doFind = useCallback(() => {
+    const text = query.trim();
+    if (!text) {
       return;
     }
 
-    const browserWindow = window as Window & {
+    const win = window as Window & {
       find?: (
         text: string,
         caseSensitive?: boolean,
@@ -98,78 +97,65 @@ export function SummaryPanel({
       ) => boolean;
     };
 
-    const found = browserWindow.find?.(query, false, false, true, false, true, false) ?? false;
+    const found = win.find?.(text, false, false, true, false, true, false) ?? false;
     if (!found) {
       toast.info('No matching text found in the summary.');
     }
-  }, [searchQuery]);
+  }, [query]);
 
-  const handleFind = useCallback(() => {
-    setIsSearchVisible((prev) => !prev);
-    setSearchQuery('');
+  const togFind = useCallback(() => {
+    setFind((prev) => !prev);
+    setQuery('');
   }, []);
 
   return (
-    <div className="flex-1 min-w-0 flex flex-col bg-white overflow-hidden">
-      {/* Title area */}
-      <div className="p-4 border-b border-gray-200">
-        {/* <EditableTitle
-          title={meetingTitle}
-          isEditing={isEditingTitle}
-          onStartEditing={onStartEditTitle}
-          onFinishEditing={onFinishEditTitle}
-          onChange={onTitleChange}
-        /> */}
-
-        {/* Button groups - only show when summary exists */}
-        {aiSummary && !isSummaryLoading && (
-          <div className="flex items-center justify-center w-full pt-0 gap-2">
-            {/* Left-aligned: Summary Generator Button Group */}
+    <div className="flex min-w-0 flex-1 flex-col overflow-hidden bg-white">
+      <div className="border-b border-gray-200 p-4">
+        {aiSum && !isLoad && (
+          <div className="flex w-full items-center justify-center gap-2 pt-0">
             <div className="flex-shrink-0">
-              <SummaryGeneratorButtonGroup
-                modelConfig={modelConfig}
-                setModelConfig={setModelConfig}
-                onSaveModelConfig={onSaveModelConfig}
-                onGenerateSummary={onGenerateSummary}
-                onStopGeneration={onStopGeneration}
-                customPrompt={customPrompt}
-                summaryStatus={summaryStatus}
-                availableTemplates={availableTemplates}
-                selectedTemplate={selectedTemplate}
-                onTemplateSelect={onTemplateSelect}
-                hasTranscripts={transcripts.length > 0}
-                isModelConfigLoading={isModelConfigLoading}
-                onOpenModelSettings={onOpenModelSettings}
+              <SumGen
+                cfg={cfg}
+                setCfg={setCfg}
+                onSave={onSaveCfg}
+                onGen={onGen}
+                onHalt={onHalt}
+                prompt={prompt}
+                sumSt={sumSt}
+                tpls={tpls}
+                selTpl={selTpl}
+                onTpl={onTpl}
+                hasTxt={rows.length > 0}
+                isCfg={isCfg}
+                onOpen={onOpen}
               />
             </div>
 
-            {/* Right-aligned: Summary Updater Button Group */}
             <div className="flex-shrink-0">
-              <SummaryUpdaterButtonGroup
+              <SumUpd
                 isSaving={isSaving}
-                isDirty={isTitleDirty || (summaryRef.current?.isDirty || false)}
+                isDirty={isTitleDirty || (sumRef.current?.isDirty || false)}
                 onSave={onSaveAll}
                 onCopy={onCopySummary}
-                onExportMarkdown={onExportMarkdown}
-                onExport={onExport}
-                onFind={handleFind}
-                onOpenFolder={onOpenFolder}
-                hasSummary={!!aiSummary}
+                onMd={onMd}
+                onExp={onExp}
+                onFind={togFind}
+                hasSummary={!!aiSum}
               />
             </div>
           </div>
         )}
 
-        {isSearchVisible && aiSummary && (
+        {isFind && aiSum && (
           <div className="mt-3 flex items-center gap-2">
             <input
-              ref={searchInputRef}
+              ref={inpRef}
               type="search"
-              value={searchQuery}
-              onChange={(event) => setSearchQuery(event.target.value)}
+              value={query}
+              onChange={(event) => setQuery(event.target.value)}
               onKeyDown={(event) => {
                 if (event.key === 'Enter') {
-                  runSearch();
+                  doFind();
                 }
               }}
               placeholder="Find text in summary"
@@ -177,7 +163,7 @@ export function SummaryPanel({
             />
             <button
               type="button"
-              onClick={runSearch}
+              onClick={doFind}
               className="rounded-md border border-gray-300 px-3 py-2 text-sm font-medium text-gray-700 hover:bg-gray-50"
             >
               Find Next
@@ -186,83 +172,79 @@ export function SummaryPanel({
         )}
       </div>
 
-      {isSummaryLoading ? (
-        <div className="flex flex-col h-full">
-          {/* Show button group during generation */}
-          <div className="flex items-center justify-center pt-8 pb-4">
-            <SummaryGeneratorButtonGroup
-              modelConfig={modelConfig}
-              setModelConfig={setModelConfig}
-              onSaveModelConfig={onSaveModelConfig}
-              onGenerateSummary={onGenerateSummary}
-              onStopGeneration={onStopGeneration}
-              customPrompt={customPrompt}
-              summaryStatus={summaryStatus}
-              availableTemplates={availableTemplates}
-              selectedTemplate={selectedTemplate}
-              onTemplateSelect={onTemplateSelect}
-              hasTranscripts={transcripts.length > 0}
-              isModelConfigLoading={isModelConfigLoading}
-              onOpenModelSettings={onOpenModelSettings}
+      {isLoad ? (
+        <div className="flex h-full flex-col">
+          <div className="flex items-center justify-center pb-4 pt-8">
+            <SumGen
+              cfg={cfg}
+              setCfg={setCfg}
+              onSave={onSaveCfg}
+              onGen={onGen}
+              onHalt={onHalt}
+              prompt={prompt}
+              sumSt={sumSt}
+              tpls={tpls}
+              selTpl={selTpl}
+              onTpl={onTpl}
+              hasTxt={rows.length > 0}
+              isCfg={isCfg}
+              onOpen={onOpen}
             />
           </div>
-          {/* Loading spinner */}
-          <div className="flex items-center justify-center flex-1">
+          <div className="flex flex-1 items-center justify-center">
             <div className="text-center">
-              <div className="inline-block animate-spin rounded-full h-12 w-12 border-t-2 border-b-2 border-blue-500 mb-4"></div>
+              <div className="mb-4 inline-block h-12 w-12 animate-spin rounded-full border-b-2 border-t-2 border-blue-500"></div>
               <p className="text-gray-600">Generating AI Summary...</p>
             </div>
           </div>
         </div>
-      ) : !aiSummary ? (
-        <div className="flex flex-col h-full">
-          {/* Centered Summary Generator Button Group when no summary */}
-          <div className="flex items-center justify-center pt-8 pb-4">
-            <SummaryGeneratorButtonGroup
-              modelConfig={modelConfig}
-              setModelConfig={setModelConfig}
-              onSaveModelConfig={onSaveModelConfig}
-              onGenerateSummary={onGenerateSummary}
-              onStopGeneration={onStopGeneration}
-              customPrompt={customPrompt}
-              summaryStatus={summaryStatus}
-              availableTemplates={availableTemplates}
-              selectedTemplate={selectedTemplate}
-              onTemplateSelect={onTemplateSelect}
-              hasTranscripts={transcripts.length > 0}
-              isModelConfigLoading={isModelConfigLoading}
-              onOpenModelSettings={onOpenModelSettings}
+      ) : !aiSum ? (
+        <div className="flex h-full flex-col">
+          <div className="flex items-center justify-center pb-4 pt-8">
+            <SumGen
+              cfg={cfg}
+              setCfg={setCfg}
+              onSave={onSaveCfg}
+              onGen={onGen}
+              onHalt={onHalt}
+              prompt={prompt}
+              sumSt={sumSt}
+              tpls={tpls}
+              selTpl={selTpl}
+              onTpl={onTpl}
+              hasTxt={rows.length > 0}
+              isCfg={isCfg}
+              onOpen={onOpen}
             />
           </div>
-          {/* Empty state message */}
           <EmptyStateSummary
-            onGenerate={() => onGenerateSummary(customPrompt)}
-            hasModel={modelConfig.provider !== null && modelConfig.model !== null}
-            isGenerating={isSummaryLoading}
+            onGenerate={() => onGen(prompt)}
+            hasModel={cfg.provider !== null && cfg.model !== null}
+            isGenerating={isLoad}
           />
         </div>
-      ) : aiSummary ? (
-        <div className="flex-1 overflow-y-auto min-h-0">
-          <div className="p-6 w-full">
+      ) : (
+        <div className="min-h-0 flex-1 overflow-y-auto">
+          <div className="w-full p-6">
             <BlockNoteSummaryView
-              ref={summaryRef}
-              summaryData={aiSummary}
-              onSave={onSaveSummary}
+              ref={sumRef}
+              summaryData={aiSum}
+              onSave={onSaveSum}
               onDirtyChange={onDirtyChange}
-              status={summaryStatus}
-              error={summaryError}
+              status={sumSt}
+              error={sumErr}
             />
           </div>
-          {summaryStatus !== 'idle' && (
-            <div className={`mt-4 p-4 rounded-lg ${summaryStatus === 'error' ? 'bg-red-100 text-red-700' :
-              summaryStatus === 'completed' ? 'bg-green-100 text-green-700' :
+          {sumSt !== 'idle' && (
+            <div className={`mt-4 rounded-lg p-4 ${sumSt === 'error' ? 'bg-red-100 text-red-700' :
+              sumSt === 'completed' ? 'bg-green-100 text-green-700' :
                 'bg-blue-100 text-blue-700'
               }`}>
-              <p className="text-sm font-medium">{getSummaryStatusMessage(summaryStatus)}</p>
+              <p className="text-sm font-medium">{getMsg(sumSt)}</p>
             </div>
           )}
         </div>
-      ) : null}
+      )}
     </div>
   );
 }

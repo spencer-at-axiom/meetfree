@@ -18,7 +18,7 @@ import { OnboardingProvider } from '@/contexts/OnboardingContext'
 import { OnboardingFlow } from '@/components/onboarding'
 import { DownloadProgressToastProvider } from '@/components/shared/DownloadProgressToast'
 import { UpdateCheckProvider } from '@/components/UpdateCheckProvider'
-import { RecordingSessionControllerProvider } from '@/contexts/RecordingSessionControllerProvider'
+import { RecCtx } from '@/contexts/RecCtx'
 import { ImportAudioDialog, ImportDropOverlay } from '@/components/ImportAudio'
 import { ImportDialogProvider } from '@/contexts/ImportDialogContext'
 import { isAudioExtension, getAudioFormatsDisplayList } from '@/constants/audioFormats'
@@ -245,7 +245,7 @@ export default function RootLayout({
                   <MeetingsProvider>
                     <TooltipProvider>
                       <TranscriptProvider>
-                        <RecordingSessionControllerProvider>
+                        <RecCtx>
                           <ImportDialogProvider onOpen={handleOpenImportDialog}>
                             <DownloadProgressToastProvider />
 
@@ -271,7 +271,7 @@ export default function RootLayout({
                               onClose={() => setShowShortcutsModal(false)}
                             />
                           </ImportDialogProvider>
-                        </RecordingSessionControllerProvider>
+                        </RecCtx>
                       </TranscriptProvider>
                     </TooltipProvider>
                   </MeetingsProvider>

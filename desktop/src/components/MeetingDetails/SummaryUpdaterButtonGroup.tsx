@@ -3,66 +3,62 @@
 import { useState } from 'react';
 import { Button } from '@/components/ui/button';
 import { ButtonGroup } from '@/components/ui/button-group';
-import { Copy, Save, Loader2, FileDown, Search } from 'lucide-react';
+import { Copy, FileDown, Loader2, Save, Search } from 'lucide-react';
 import Analytics from '@/lib/analytics';
 import { ExportDialog } from './ExportDialog';
 import type { ExportFormat } from '@/types/export';
 
-interface SummaryUpdaterButtonGroupProps {
+interface UpdBtn {
   isSaving: boolean;
   isDirty: boolean;
   onSave: () => Promise<void>;
   onCopy: () => Promise<void>;
-  onExportMarkdown?: () => Promise<void>;
-  onExport?: (format: ExportFormat) => Promise<void>;
+  onMd?: () => Promise<void>;
+  onExp?: (format: ExportFormat) => Promise<void>;
   onFind?: () => void;
-  onOpenFolder: () => Promise<void>;
   hasSummary: boolean;
 }
 
-export function SummaryUpdaterButtonGroup({
+export function SumUpd({
   isSaving,
   isDirty,
   onSave,
   onCopy,
-  onExportMarkdown,
-  onExport,
+  onMd,
+  onExp,
   onFind,
-  onOpenFolder: _onOpenFolder,
-  hasSummary
-}: SummaryUpdaterButtonGroupProps) {
-  const [exportDialogOpen, setExportDialogOpen] = useState(false);
-  const [isExporting, setIsExporting] = useState(false);
+  hasSummary,
+}: UpdBtn) {
+  const [dlgOpen, setDlg] = useState(false);
+  const [isExp, setExp] = useState(false);
 
-  const handleExport = async (format: ExportFormat) => {
-    if (!onExport) {
-      // Fallback to markdown export if onExport not provided
-      if (onExportMarkdown) {
-        await onExportMarkdown();
+  const doExp = async (format: ExportFormat) => {
+    if (!onExp) {
+      if (onMd) {
+        await onMd();
       }
       return;
     }
 
-    setIsExporting(true);
+    setExp(true);
     try {
-      await onExport(format);
+      await onExp(format);
     } finally {
-      setIsExporting(false);
+      setExp(false);
     }
   };
 
   return (
     <>
       <ButtonGroup>
-        {/* Save button */}
         <Button
           variant="outline"
           size="sm"
-          className={`${isDirty ? 'bg-green-200' : ""}`}
-          title={isSaving ? "Saving" : "Save Changes"}
+          className={`${isDirty ? 'bg-green-200' : ''}`}
+          title={isSaving ? 'Saving' : 'Save Changes'}
           onClick={() => {
             Analytics.trackButtonClick('save_changes', 'meeting_details');
-            onSave();
+            void onSave();
           }}
           disabled={isSaving}
         >
@@ -79,14 +75,13 @@ export function SummaryUpdaterButtonGroup({
           )}
         </Button>
 
-        {/* Copy button */}
         <Button
           variant="outline"
           size="sm"
           title="Copy Summary"
           onClick={() => {
             Analytics.trackButtonClick('copy_summary', 'meeting_details');
-            onCopy();
+            void onCopy();
           }}
           disabled={!hasSummary}
           className="cursor-pointer"
@@ -95,19 +90,19 @@ export function SummaryUpdaterButtonGroup({
           <span className="hidden lg:inline">Copy</span>
         </Button>
 
-        {(onExportMarkdown || onExport) && (
+        {(onMd || onExp) && (
           <Button
             variant="outline"
             size="sm"
             title="Export Meeting"
             onClick={() => {
               Analytics.trackButtonClick('export_meeting', 'meeting_details');
-              setExportDialogOpen(true);
+              setDlg(true);
             }}
             className="cursor-pointer"
-            disabled={isExporting}
+            disabled={isExp}
           >
-            {isExporting ? (
+            {isExp ? (
               <Loader2 className="animate-spin" />
             ) : (
               <FileDown />
@@ -134,13 +129,12 @@ export function SummaryUpdaterButtonGroup({
         )}
       </ButtonGroup>
 
-      {/* Export format selection dialog */}
-      {(onExportMarkdown || onExport) && (
+      {(onMd || onExp) && (
         <ExportDialog
-          open={exportDialogOpen}
-          onOpenChange={setExportDialogOpen}
-          onExport={handleExport}
-          isLoading={isExporting}
+          open={dlgOpen}
+          onOpenChange={setDlg}
+          onExport={doExp}
+          isLoading={isExp}
         />
       )}
     </>

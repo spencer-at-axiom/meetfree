@@ -4,7 +4,7 @@ import { useEffect } from 'react';
 import { motion } from 'framer-motion';
 import { useConfig } from '@/contexts/ConfigContext';
 import { useRecordingState, RecordingStatus } from '@/contexts/RecordingStateContext';
-import { useGlobalRecordingController } from '@/contexts/RecordingSessionControllerProvider';
+import { useRcx } from '@/contexts/RecCtx';
 import { useModalState } from '@/hooks/useModalState';
 import { useRecordPageRecovery } from '@/hooks/useRecordPageRecovery';
 import { useRecordingKeyboardShortcut } from '@/hooks/useRecordingKeyboardShortcut';
@@ -22,29 +22,29 @@ export function RecordPage() {
   const { status, isStopping, isProcessing, hasCompletedInitialSync, isRecording } = recordingState;
   const { modals, messages, showModal, hideModal } = useModalState(transcriptModelConfig);
   const {
-    isRecordingDisabled,
-    readinessState,
-    canRecord,
-    readiness,
-    handleStart,
-    handleStop,
-    handlePause,
-    handleResume,
-    registerShowModal,
-  } = useGlobalRecordingController();
+    isDis,
+    rdySt,
+    canRec,
+    rdy,
+    start,
+    stop,
+    pause,
+    rsm,
+    regMod,
+  } = useRcx();
 
   useEffect(() => {
     Analytics.trackPageView('home');
   }, []);
 
   useEffect(() => {
-    return registerShowModal(showModal);
-  }, [registerShowModal, showModal]);
+    return regMod(showModal);
+  }, [regMod, showModal]);
 
   useRecordingKeyboardShortcut({
     isRecording,
-    isRecordingDisabled,
-    onStart: handleStart,
+    isRecordingDisabled: isDis,
+    onStart: start,
   });
 
   const { recoveryDialogProps } = useRecordPageRecovery({
@@ -72,9 +72,9 @@ export function RecordPage() {
 
       {isRecording ? (
         <ActiveRecording
-          onPause={handlePause}
-          onResume={handleResume}
-          onStop={handleStop}
+          onPause={pause}
+          onResume={rsm}
+          onStop={stop}
         >
           <RecordingTranscriptPane
             isProcessingStop={isProcessingStop}
@@ -83,11 +83,11 @@ export function RecordPage() {
         </ActiveRecording>
       ) : (
         <RecordingReadyView
-          onStartRecording={handleStart}
-          readinessState={readinessState}
-          readiness={readiness}
-          canRecord={canRecord}
-          isDisabled={isRecordingDisabled}
+          onStartRecording={start}
+          readinessState={rdySt}
+          readiness={rdy}
+          canRecord={canRec}
+          isDisabled={isDis}
         />
       )}
 

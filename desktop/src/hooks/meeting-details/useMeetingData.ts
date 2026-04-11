@@ -9,7 +9,6 @@ import type { MeetingDetails } from '@/types/meeting';
 interface UseMeetingDataProps {
   meeting: MeetingDetails;
   summaryData: SummaryPayload | null;
-  onMeetingUpdated?: () => Promise<void>;
 }
 
 function getErrorMessage(error: unknown): string {
@@ -29,7 +28,7 @@ function getErrorMessage(error: unknown): string {
   return 'Unknown error';
 }
 
-export function useMeetingData({ meeting, summaryData, onMeetingUpdated: _onMeetingUpdated }: UseMeetingDataProps) {
+export function useMeetingData({ meeting, summaryData }: UseMeetingDataProps) {
   // State
   // Use prop directly since summary generation fetches transcripts independently
   const transcripts = meeting.transcripts;

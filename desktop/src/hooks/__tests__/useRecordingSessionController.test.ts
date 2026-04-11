@@ -1,6 +1,6 @@
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
 import { renderHook, act, waitFor } from '@testing-library/react';
-import { useRecordingSessionController } from '../useRecordingSessionController';
+import { useRec } from '../rec/useRec';
 import { recordingService } from '@/services/recordingService';
 import Analytics from '@/lib/analytics';
 
@@ -185,7 +185,7 @@ function createStopPayload(overrides: Partial<{
   };
 }
 
-describe('useRecordingSessionController', () => {
+describe('useRec', () => {
   beforeEach(() => {
     vi.clearAllMocks();
     mocks.checkReadiness.mockResolvedValue(mocks.readyReadiness);
@@ -200,10 +200,10 @@ describe('useRecordingSessionController', () => {
   });
 
   it('starts recording after a successful readiness check', async () => {
-    const { result } = renderHook(() => useRecordingSessionController());
+    const { result } = renderHook(() => useRec());
 
     await act(async () => {
-      await result.current.handleStart();
+      await result.current.start();
     });
 
     expect(mocks.checkReadiness).toHaveBeenCalled();
@@ -222,10 +222,10 @@ describe('useRecordingSessionController', () => {
       issues: ['Selected system audio device is not available'],
     });
 
-    const { result } = renderHook(() => useRecordingSessionController());
+    const { result } = renderHook(() => useRec());
 
     await act(async () => {
-      await result.current.handleStart();
+      await result.current.start();
     });
 
     expect(recordingService.startRecordingWithDevices).not.toHaveBeenCalled();
@@ -239,14 +239,14 @@ describe('useRecordingSessionController', () => {
     const payload = createStopPayload({ finalized_at: '2024-01-01T12:00:00Z' });
     mocks.stopAndFinalizeRecording.mockResolvedValue(payload);
 
-    const { result } = renderHook(() => useRecordingSessionController());
+    const { result } = renderHook(() => useRec());
 
     await act(async () => {
-      await result.current.handleStop();
+      await result.current.stop();
     });
 
     await act(async () => {
-      await result.current.handleStop();
+      await result.current.stop();
     });
 
     await waitFor(() => {
@@ -258,23 +258,20 @@ describe('useRecordingSessionController', () => {
     const payload = createStopPayload({ finalized_at: '2024-01-01T12:00:09Z' });
     mocks.stopAndFinalizeRecording.mockResolvedValue(payload);
 
-    const { result } = renderHook(() => useRecordingSessionController());
+    const { result } = renderHook(() => useRec());
 
     await waitFor(() => {
       expect(recordingService.onRecordingStopped).toHaveBeenCalled();
     });
 
-    // Global stop shortcut path
     await act(async () => {
-      await result.current.handleStop();
+      await result.current.stop();
     });
 
-    // Tray stop path (backend event)
     await act(async () => {
       mocks.recordingStoppedHandler?.(payload);
     });
 
-    // Route-change stop path also converges through backend finalization event
     await act(async () => {
       mocks.recordingStoppedHandler?.(payload);
     });
@@ -289,14 +286,14 @@ describe('useRecordingSessionController', () => {
       .mockResolvedValueOnce(createStopPayload({ finalized_at: '2024-01-01T12:00:01Z' }))
       .mockResolvedValueOnce(createStopPayload({ finalized_at: '2024-01-01T12:00:02Z' }));
 
-    const { result } = renderHook(() => useRecordingSessionController());
+    const { result } = renderHook(() => useRec());
 
     await act(async () => {
-      await result.current.handleStop();
+      await result.current.stop();
     });
 
     await act(async () => {
-      await result.current.handleStop();
+      await result.current.stop();
     });
 
     await waitFor(() => {
@@ -304,22 +301,22 @@ describe('useRecordingSessionController', () => {
     });
   });
 
-  it('calls recordingService.pauseRecording when handlePause is called', async () => {
-    const { result } = renderHook(() => useRecordingSessionController());
+  it('calls recordingService.pauseRecording when pause is called', async () => {
+    const { result } = renderHook(() => useRec());
 
     await act(async () => {
-      await result.current.handlePause();
+      await result.current.pause();
     });
 
     expect(recordingService.pauseRecording).toHaveBeenCalledTimes(1);
     expect(Analytics.trackButtonClick).toHaveBeenCalledWith('pause_recording', 'controller');
   });
 
-  it('calls recordingService.resumeRecording when handleResume is called', async () => {
-    const { result } = renderHook(() => useRecordingSessionController());
+  it('calls recordingService.resumeRecording when rsm is called', async () => {
+    const { result } = renderHook(() => useRec());
 
     await act(async () => {
-      await result.current.handleResume();
+      await result.current.rsm();
     });
 
     expect(recordingService.resumeRecording).toHaveBeenCalledTimes(1);
@@ -329,10 +326,10 @@ describe('useRecordingSessionController', () => {
   it('handles pause errors gracefully', async () => {
     mocks.pauseRecording.mockRejectedValueOnce(new Error('Pause failed'));
 
-    const { result } = renderHook(() => useRecordingSessionController());
+    const { result } = renderHook(() => useRec());
 
     await act(async () => {
-      await result.current.handlePause();
+      await result.current.pause();
     });
 
     expect(mocks.toastError).toHaveBeenCalledWith('Failed to pause recording', {
@@ -343,10 +340,10 @@ describe('useRecordingSessionController', () => {
   it('handles resume errors gracefully', async () => {
     mocks.resumeRecording.mockRejectedValueOnce(new Error('Resume failed'));
 
-    const { result } = renderHook(() => useRecordingSessionController());
+    const { result } = renderHook(() => useRec());
 
     await act(async () => {
-      await result.current.handleResume();
+      await result.current.rsm();
     });
 
     expect(mocks.toastError).toHaveBeenCalledWith('Failed to resume recording', {
@@ -362,10 +359,10 @@ describe('useRecordingSessionController', () => {
       })
     );
 
-    const { result } = renderHook(() => useRecordingSessionController());
+    const { result } = renderHook(() => useRec());
 
     await act(async () => {
-      await result.current.handleStop();
+      await result.current.stop();
     });
 
     await waitFor(() => {
@@ -387,10 +384,10 @@ describe('useRecordingSessionController', () => {
       })
     );
 
-    const { result } = renderHook(() => useRecordingSessionController());
+    const { result } = renderHook(() => useRec());
 
     await act(async () => {
-      await result.current.handleStop();
+      await result.current.stop();
     });
 
     await waitFor(() => {
@@ -407,10 +404,10 @@ describe('useRecordingSessionController', () => {
       })
     );
 
-    const { result } = renderHook(() => useRecordingSessionController());
+    const { result } = renderHook(() => useRec());
 
     await act(async () => {
-      await result.current.handleStop();
+      await result.current.stop();
     });
 
     await waitFor(() => {
@@ -424,7 +421,7 @@ describe('useRecordingSessionController', () => {
   });
 
   it('registers a listener for backend recording-stopped events', async () => {
-    renderHook(() => useRecordingSessionController());
+    renderHook(() => useRec());
 
     await waitFor(() => {
       expect(recordingService.onRecordingStopped).toHaveBeenCalled();
@@ -432,7 +429,7 @@ describe('useRecordingSessionController', () => {
   });
 
   it('cleans up the backend recording-stopped listener on unmount', async () => {
-    const { unmount } = renderHook(() => useRecordingSessionController());
+    const { unmount } = renderHook(() => useRec());
 
     await waitFor(() => {
       expect(recordingService.onRecordingStopped).toHaveBeenCalled();
@@ -444,16 +441,16 @@ describe('useRecordingSessionController', () => {
   });
 
   it('initializes with default controller state', () => {
-    const { result } = renderHook(() => useRecordingSessionController());
+    const { result } = renderHook(() => useRec());
 
-    expect(result.current.isRecording).toBe(false);
-    expect(result.current.isRecordingDisabled).toBe(false);
-    expect(result.current.isAutoStarting).toBe(false);
+    expect(result.current.isRec).toBe(false);
+    expect(result.current.isDis).toBe(false);
+    expect(result.current.isAuto).toBe(false);
   });
 
   it('uses recording context as the canonical isRecording source', () => {
     mocks.recordingState.isRecording = true;
-    const { result } = renderHook(() => useRecordingSessionController());
-    expect(result.current.isRecording).toBe(true);
+    const { result } = renderHook(() => useRec());
+    expect(result.current.isRec).toBe(true);
   });
 });

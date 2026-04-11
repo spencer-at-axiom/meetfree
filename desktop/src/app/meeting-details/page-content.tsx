@@ -9,7 +9,7 @@ import { toast } from 'sonner';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { Button } from '@/components/ui/button';
 import { TranscriptTab } from '@/components/MeetingTabs/TranscriptTab';
-import { SummaryTab } from '@/components/MeetingTabs/SummaryTab';
+import { SumTab } from '@/components/MeetingTabs/SummaryTab';
 import { ExportDialog } from '@/components/MeetingDetails/ExportDialog';
 import {
   ModelConfig,
@@ -22,7 +22,7 @@ import { useKeyboardShortcuts } from '@/hooks/useKeyboardShortcuts';
 import { useCopyOperations } from '@/hooks/meeting-details/useCopyOperations';
 import { useMeetingData } from '@/hooks/meeting-details/useMeetingData';
 import { useMeetingOperations } from '@/hooks/meeting-details/useMeetingOperations';
-import { useSummaryGeneration } from '@/hooks/meeting-details/useSummaryGeneration';
+import { useSum } from '@/hooks/meeting-details/useSum';
 import { useTemplates } from '@/hooks/meeting-details/useTemplates';
 import Analytics from '@/lib/analytics';
 import type { MeetingDetails } from '@/types/meeting';
@@ -58,7 +58,6 @@ export default function PageContent({
   onLoadMore,
 }: MeetingPageContentProps) {
   const [customPrompt, setCustomPrompt] = useState('');
-  const [isRecording] = useState(false);
   const [activeTab, setActiveTab] = useState('summary');
   const [isExportDialogOpen, setIsExportDialogOpen] = useState(false);
   const router = useRouter();
@@ -67,7 +66,7 @@ export default function PageContent({
   const openModelSettingsRef = useRef<(() => void) | null>(null);
   const { modelConfig, setModelConfig } = useConfig();
 
-  const meetingData = useMeetingData({ meeting, summaryData, onMeetingUpdated });
+  const meetingData = useMeetingData({ meeting, summaryData });
   const templates = useTemplates();
 
   useEffect(() => {
@@ -88,11 +87,11 @@ export default function PageContent({
     },
   });
 
-  const handleRegisterModalOpen = (openFn: () => void) => {
+  const regDlg = (openFn: () => void) => {
     openModelSettingsRef.current = openFn;
   };
 
-  const handleOpenModelSettings = () => {
+  const openDlg = () => {
     if (openModelSettingsRef.current) {
       openModelSettingsRef.current();
     } else {
@@ -100,7 +99,7 @@ export default function PageContent({
     }
   };
 
-  const handleSaveModelConfig = async (
+  const saveCfg = async (
     config?: ModelConfig,
     options?: ModelSaveOptions
   ) => {
@@ -131,26 +130,24 @@ export default function PageContent({
   };
 
   const {
-    handleGenerateSummary,
-    handleStopGeneration,
-    summaryStatus,
-    summaryError,
-    getSummaryStatusMessage,
-  } = useSummaryGeneration({
+    gen,
+    halt,
+    sumSt,
+    sumErr,
+    msg,
+  } = useSum({
     meeting,
-    transcripts: meetingData.transcripts,
     modelConfig,
     isModelConfigLoading: false,
     selectedTemplate: templates.selectedTemplate,
     onMeetingUpdated,
     updateMeetingTitle: meetingData.updateMeetingTitle,
     setAiSummary: meetingData.setAiSummary,
-    onOpenModelSettings: handleOpenModelSettings,
+    onOpenModelSettings: openDlg,
   });
 
   const copyOperations = useCopyOperations({
     meeting,
-    transcripts: meetingData.transcripts,
     meetingTitle: meetingData.meetingTitle,
     aiSummary: meetingData.aiSummary,
     blockNoteSummaryRef: meetingData.blockNoteSummaryRef,
@@ -169,7 +166,7 @@ export default function PageContent({
 
     const autoGenerate = async () => {
       if (shouldAutoGenerate && meetingData.transcripts.length > 0 && !cancelled) {
-        await handleGenerateSummary('');
+        await gen('');
 
         if (onAutoGenerateComplete && !cancelled) {
           onAutoGenerateComplete();
@@ -189,7 +186,7 @@ export default function PageContent({
     modelConfig.provider,
     modelConfig.model,
     onAutoGenerateComplete,
-    handleGenerateSummary,
+    gen,
   ]);
 
   return (
@@ -293,7 +290,7 @@ export default function PageContent({
               onPromptChange={setCustomPrompt}
               onCopyTranscript={copyOperations.handleCopyTranscript}
               onOpenMeetingFolder={meetingOperations.handleOpenMeetingFolder}
-              isRecording={isRecording}
+              isRecording={false}
               segments={segments}
               hasMore={hasMore}
               isLoadingMore={isLoadingMore}
@@ -307,33 +304,32 @@ export default function PageContent({
           </TabsContent>
 
           <TabsContent value="summary" className="m-0 h-full">
-            <SummaryTab
+            <SumTab
               isTitleDirty={meetingData.isTitleDirty}
-              summaryRef={meetingData.blockNoteSummaryRef}
+              sumRef={meetingData.blockNoteSummaryRef}
               isSaving={meetingData.isSaving}
               onSaveAll={meetingData.saveAllChanges}
               onCopySummary={copyOperations.handleCopySummary}
-              onExportMarkdown={meetingOperations.handleExportMarkdown}
-              onExport={meetingOperations.handleExport}
-              onOpenFolder={meetingOperations.handleOpenMeetingFolder}
-              aiSummary={meetingData.aiSummary}
-              summaryStatus={summaryStatus}
-              transcripts={meetingData.transcripts}
-              modelConfig={modelConfig}
-              setModelConfig={setModelConfig}
-              onSaveModelConfig={handleSaveModelConfig}
-              onGenerateSummary={handleGenerateSummary}
-              onStopGeneration={handleStopGeneration}
-              customPrompt={customPrompt}
-              onSaveSummary={meetingData.handleSaveSummary}
+              onMd={meetingOperations.handleExportMarkdown}
+              onExp={meetingOperations.handleExport}
+              aiSum={meetingData.aiSummary}
+              sumSt={sumSt}
+              rows={meetingData.transcripts}
+              cfg={modelConfig}
+              setCfg={setModelConfig}
+              onSaveCfg={saveCfg}
+              onGen={gen}
+              onHalt={halt}
+              prompt={customPrompt}
+              onSaveSum={meetingData.handleSaveSummary}
               onDirtyChange={meetingData.setIsSummaryDirty}
-              summaryError={summaryError}
-              getSummaryStatusMessage={getSummaryStatusMessage}
-              availableTemplates={templates.availableTemplates}
-              selectedTemplate={templates.selectedTemplate}
-              onTemplateSelect={templates.handleTemplateSelection}
-              isModelConfigLoading={false}
-              onOpenModelSettings={handleRegisterModalOpen}
+              sumErr={sumErr}
+              getMsg={msg}
+              tpls={templates.availableTemplates}
+              selTpl={templates.selectedTemplate}
+              onTpl={templates.handleTemplateSelection}
+              isCfg={false}
+              onOpen={regDlg}
             />
           </TabsContent>
         </Tabs>

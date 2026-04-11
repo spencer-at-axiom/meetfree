@@ -1,6 +1,6 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { act, renderHook, waitFor } from '@testing-library/react';
-import { useSummaryGeneration } from '../useSummaryGeneration';
+import { useSum } from '../useSum';
 import { createMarkdownSummaryPayload } from '@/contracts/summaryContract';
 import type { MeetingDetails } from '@/types/meeting';
 import type { Transcript } from '@/types';
@@ -75,9 +75,8 @@ function renderSummaryHook(overrides?: Partial<{
   const onOpenModelSettings = overrides?.onOpenModelSettings;
 
   const hook = renderHook(() =>
-    useSummaryGeneration({
+    useSum({
       meeting,
-      transcripts: transcriptRows,
       modelConfig,
       isModelConfigLoading: false,
       selectedTemplate: 'default',
@@ -95,7 +94,7 @@ function renderSummaryHook(overrides?: Partial<{
   };
 }
 
-describe('useSummaryGeneration', () => {
+describe('useSum', () => {
   beforeEach(() => {
     vi.clearAllMocks();
   });
@@ -111,7 +110,7 @@ describe('useSummaryGeneration', () => {
     const { result } = renderSummaryHook();
 
     await act(async () => {
-      await result.current.handleGenerateSummary('');
+      await result.current.gen('');
     });
 
     expect(mocks.startSummaryPolling).not.toHaveBeenCalled();
@@ -159,7 +158,7 @@ describe('useSummaryGeneration', () => {
     });
 
     await act(async () => {
-      await result.current.handleGenerateSummary('');
+      await result.current.gen('');
     });
 
     await waitFor(() => {
@@ -170,7 +169,7 @@ describe('useSummaryGeneration', () => {
       description: 'Your meeting summary is ready',
       duration: 4000,
     });
-    expect(result.current.summaryStatus).toBe('completed');
+    expect(result.current.sumSt).toBe('completed');
   });
 
   it('cancels summary generation and resets local summary status', async () => {
@@ -184,12 +183,12 @@ describe('useSummaryGeneration', () => {
     const { result } = renderSummaryHook();
 
     await act(async () => {
-      await result.current.handleStopGeneration();
+      await result.current.halt();
     });
 
     expect(mocks.stopSummaryPolling).toHaveBeenCalledWith('meeting-1');
-    expect(result.current.summaryStatus).toBe('idle');
-    expect(result.current.summaryError).toBeNull();
+    expect(result.current.sumSt).toBe('idle');
+    expect(result.current.sumErr).toBeNull();
     expect(mocks.toastInfo).toHaveBeenCalledWith('Summary generation stopped', {
       description: 'You can generate a new summary anytime',
       duration: 3000,

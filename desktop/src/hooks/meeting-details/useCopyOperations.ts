@@ -9,7 +9,6 @@ import type { MeetingDetails } from '@/types/meeting';
 
 interface UseCopyOperationsProps {
   meeting: MeetingDetails;
-  transcripts: Transcript[];
   meetingTitle: string;
   aiSummary: SummaryPayload | null;
   blockNoteSummaryRef: RefObject<BlockNoteSummaryViewRef>;
@@ -17,7 +16,6 @@ interface UseCopyOperationsProps {
 
 export function useCopyOperations({
   meeting,
-  transcripts: _transcripts,
   meetingTitle,
   aiSummary,
   blockNoteSummaryRef,

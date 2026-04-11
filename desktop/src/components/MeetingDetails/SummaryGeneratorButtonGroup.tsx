@@ -8,10 +8,10 @@ import {
 import {
   Dialog,
   DialogContent,
-  DialogTrigger,
   DialogTitle,
-} from "@/components/ui/dialog"
-import { VisuallyHidden } from "@/components/ui/visually-hidden"
+  DialogTrigger,
+} from '@/components/ui/dialog';
+import { VisuallyHidden } from '@/components/ui/visually-hidden';
 import { Button } from '@/components/ui/button';
 import { ButtonGroup } from '@/components/ui/button-group';
 import {
@@ -20,135 +20,124 @@ import {
   DropdownMenuItem,
   DropdownMenuTrigger,
 } from '@/components/ui/dropdown-menu';
-import { Sparkles, Settings, Loader2, FileText, Check, Square } from 'lucide-react';
+import { Check, FileText, Loader2, Settings, Sparkles, Square } from 'lucide-react';
 import Analytics from '@/lib/analytics';
 import { invoke } from '@tauri-apps/api/core';
 import { toast } from 'sonner';
-import { useState, useEffect } from 'react';
+import { useEffect, useState } from 'react';
 import { isOllamaNotInstalledError } from '@/lib/utils';
+import type { SumSt } from '@/hooks/meeting-details/sumMsg';
 
-interface SummaryGeneratorButtonGroupProps {
-  modelConfig: ModelConfig;
-  setModelConfig: (config: ModelConfig | ((prev: ModelConfig) => ModelConfig)) => void;
-  onSaveModelConfig: (config?: ModelConfig, options?: ModelSaveOptions) => Promise<void>;
-  onGenerateSummary: (customPrompt: string) => Promise<void>;
-  onStopGeneration: () => void;
-  customPrompt: string;
-  summaryStatus: 'idle' | 'processing' | 'summarizing' | 'regenerating' | 'completed' | 'error';
-  availableTemplates: Array<{ id: string, name: string, description: string }>;
-  selectedTemplate: string;
-  onTemplateSelect: (templateId: string, templateName: string) => void;
-  hasTranscripts?: boolean;
-  isModelConfigLoading?: boolean;
-  onOpenModelSettings?: (openFn: () => void) => void;
+interface GenBtn {
+  cfg: ModelConfig;
+  setCfg: (config: ModelConfig | ((prev: ModelConfig) => ModelConfig)) => void;
+  onSave: (config?: ModelConfig, options?: ModelSaveOptions) => Promise<void>;
+  onGen: (prompt: string) => Promise<void>;
+  onHalt: () => void;
+  prompt: string;
+  sumSt: SumSt;
+  tpls: Array<{ id: string; name: string; description: string }>;
+  selTpl: string;
+  onTpl: (templateId: string, templateName: string) => void;
+  hasTxt?: boolean;
+  isCfg?: boolean;
+  onOpen?: (openFn: () => void) => void;
 }
 
-export function SummaryGeneratorButtonGroup({
-  modelConfig,
-  setModelConfig,
-  onSaveModelConfig,
-  onGenerateSummary,
-  onStopGeneration,
-  customPrompt,
-  summaryStatus,
-  availableTemplates,
-  selectedTemplate,
-  onTemplateSelect,
-  hasTranscripts = true,
-  isModelConfigLoading = false,
-  onOpenModelSettings
-}: SummaryGeneratorButtonGroupProps) {
-  const [isCheckingModels, setIsCheckingModels] = useState(false);
-  const [settingsDialogOpen, setSettingsDialogOpen] = useState(false);
+export function SumGen({
+  cfg,
+  setCfg,
+  onSave,
+  onGen,
+  onHalt,
+  prompt,
+  sumSt,
+  tpls,
+  selTpl,
+  onTpl,
+  hasTxt = true,
+  isCfg = false,
+  onOpen,
+}: GenBtn) {
+  const [isChk, setChk] = useState(false);
+  const [dlgOpen, setDlg] = useState(false);
 
-  // Expose the function to open the modal via callback registration
   useEffect(() => {
-    if (onOpenModelSettings) {
-      // Register our open dialog function with the parent by calling the callback
-      // This allows the parent to store a reference to this function
-      const openDialog = () => {
-        console.log('📱 Opening model settings dialog via callback');
-        setSettingsDialogOpen(true);
-      };
-
-      // Call the parent's callback with our open function
-      // Note: This assumes onOpenModelSettings accepts a function parameter
-      // We'll need to adjust the signature
-      onOpenModelSettings(openDialog);
-    }
-  }, [onOpenModelSettings]);
-
-  if (!hasTranscripts) {
-    return null;
-  }
-
-  const checkOllamaModelsAndGenerate = async () => {
-    // Only check for Ollama provider
-    if (modelConfig.provider !== 'ollama') {
-      onGenerateSummary(customPrompt);
+    if (!onOpen) {
       return;
     }
 
-    setIsCheckingModels(true);
-    try {
-      const endpoint = modelConfig.ollamaEndpoint || null;
-      const models = await invoke('get_ollama_models', { endpoint }) as any[];
+    const openDlg = () => {
+      console.log('Opening model settings dialog via callback');
+      setDlg(true);
+    };
 
-      if (!models || models.length === 0) {
-        // No models available, show message and open settings
+    onOpen(openDlg);
+  }, [onOpen]);
+
+  if (!hasTxt) {
+    return null;
+  }
+
+  const runGen = async () => {
+    if (cfg.provider !== 'ollama') {
+      await onGen(prompt);
+      return;
+    }
+
+    setChk(true);
+    try {
+      const endpoint = cfg.ollamaEndpoint || null;
+      const rows = await invoke('get_ollama_models', { endpoint }) as any[];
+
+      if (!rows || rows.length === 0) {
         toast.error(
           'No Ollama models found. Please download gemma2:2b from Model Settings.',
           { duration: 5000 }
         );
-        setSettingsDialogOpen(true);
+        setDlg(true);
         return;
       }
 
-      // Models are available, proceed with generation
-      onGenerateSummary(customPrompt);
+      await onGen(prompt);
     } catch (error) {
       console.error('Error checking Ollama models:', error);
-      const errorMessage = error instanceof Error ? error.message : String(error);
+      const errMsg = error instanceof Error ? error.message : String(error);
 
-      if (isOllamaNotInstalledError(errorMessage)) {
-        // Ollama is not installed - show specific message with download link
-        toast.error(
-          'Ollama is not installed',
-          {
-            description: 'Please download and install Ollama to use local models.',
-            duration: 7000,
-            action: {
-              label: 'Download',
-              onClick: () => invoke('external_url_open', { url: 'https://ollama.com/download' })
-            }
-          }
-        );
+      if (isOllamaNotInstalledError(errMsg)) {
+        toast.error('Ollama is not installed', {
+          description: 'Please download and install Ollama to use local models.',
+          duration: 7000,
+          action: {
+            label: 'Download',
+            onClick: () => invoke('external_url_open', { url: 'https://ollama.com/download' }),
+          },
+        });
       } else {
-        // Other error - generic message
         toast.error(
           'Failed to check Ollama models. Please check if Ollama is running and download a model.',
           { duration: 5000 }
         );
       }
-      setSettingsDialogOpen(true);
+
+      setDlg(true);
     } finally {
-      setIsCheckingModels(false);
+      setChk(false);
     }
   };
 
-  const isGenerating = summaryStatus === 'processing' || summaryStatus === 'summarizing' || summaryStatus === 'regenerating';
+  const isGen = sumSt === 'processing' || sumSt === 'summarizing' || sumSt === 'regenerating';
 
   return (
     <ButtonGroup>
-      {/* Generate Summary or Stop button */}
-      {isGenerating ? (
+      {isGen ? (
         <Button
           variant="outline"
           size="sm"
-          className="bg-gradient-to-r from-red-50 to-orange-50 hover:from-red-100 hover:to-orange-100 border-red-200 xl:px-4"
+          className="border-red-200 bg-gradient-to-r from-red-50 to-orange-50 xl:px-4 hover:from-red-100 hover:to-orange-100"
           onClick={() => {
             Analytics.trackButtonClick('stop_summary_generation', 'meeting_details');
-            onStopGeneration();
+            onHalt();
           }}
           title="Stop summary generation"
         >
@@ -159,21 +148,21 @@ export function SummaryGeneratorButtonGroup({
         <Button
           variant="outline"
           size="sm"
-          className="bg-gradient-to-r from-blue-50 to-purple-50 hover:from-blue-100 hover:to-purple-100 border-blue-200 xl:px-4"
+          className="border-blue-200 bg-gradient-to-r from-blue-50 to-purple-50 xl:px-4 hover:from-blue-100 hover:to-purple-100"
           onClick={() => {
             Analytics.trackButtonClick('generate_summary', 'meeting_details');
-            checkOllamaModelsAndGenerate();
+            void runGen();
           }}
-          disabled={isCheckingModels || isModelConfigLoading}
+          disabled={isChk || isCfg}
           title={
-            isModelConfigLoading
+            isCfg
               ? 'Loading model configuration...'
-              : isCheckingModels
+              : isChk
                 ? 'Checking models...'
                 : 'Generate AI Summary'
           }
         >
-          {isCheckingModels || isModelConfigLoading ? (
+          {isChk || isCfg ? (
             <>
               <Loader2 className="animate-spin xl:mr-2" size={18} />
               <span className="hidden xl:inline">Processing...</span>
@@ -187,66 +176,53 @@ export function SummaryGeneratorButtonGroup({
         </Button>
       )}
 
-      {/* Settings button */}
-      <Dialog open={settingsDialogOpen} onOpenChange={setSettingsDialogOpen}>
+      <Dialog open={dlgOpen} onOpenChange={setDlg}>
         <DialogTrigger asChild>
-          <Button
-            variant="outline"
-            size="sm"
-            title="Summary Settings"
-          >
+          <Button variant="outline" size="sm" title="Summary Settings">
             <Settings />
             <span className="hidden lg:inline">AI Model</span>
           </Button>
         </DialogTrigger>
-        <DialogContent
-          aria-describedby={undefined}
-        >
+        <DialogContent aria-describedby={undefined}>
           <VisuallyHidden>
             <DialogTitle>Model Settings</DialogTitle>
           </VisuallyHidden>
           <ModelSettingsModal
-            onSave={async (config, options) => {
-              await onSaveModelConfig(config, options);
+            onSave={async (nextCfg, options) => {
+              await onSave(nextCfg, options);
               if (!options?.silent) {
-                setSettingsDialogOpen(false);
+                setDlg(false);
               }
             }}
-            modelConfig={modelConfig}
-            setModelConfig={setModelConfig}
+            modelConfig={cfg}
+            setModelConfig={setCfg}
             skipInitialFetch={true}
           />
         </DialogContent>
       </Dialog>
 
-      {/* Template selector dropdown */}
-      {availableTemplates.length > 0 && (
+      {tpls.length > 0 && (
         <DropdownMenu>
           <DropdownMenuTrigger asChild>
-            <Button
-              variant="outline"
-              size="sm"
-              title="Select summary template"
-            >
+            <Button variant="outline" size="sm" title="Select summary template">
               <FileText />
               <span className="hidden lg:inline">Template</span>
             </Button>
           </DropdownMenuTrigger>
           <DropdownMenuContent align="end">
-            {availableTemplates.map((template) => (
+            {tpls.map((tpl) => (
               <DropdownMenuItem
-                key={template.id}
-                onClick={() => onTemplateSelect(template.id, template.name)}
-                title={template.description}
+                key={tpl.id}
+                onClick={() => onTpl(tpl.id, tpl.name)}
+                title={tpl.description}
                 className="flex items-center justify-between gap-2"
               >
-                <span>{template.name}</span>
-                {selectedTemplate === template.id && (
+                <span>{tpl.name}</span>
+                {selTpl === tpl.id && (
                   <Check className="h-4 w-4 text-green-600" />
                 )}
               </DropdownMenuItem>
             ))}
-
           </DropdownMenuContent>
         </DropdownMenu>
       )}
