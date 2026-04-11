@@ -1,6 +1,6 @@
 'use client';
 
-import React, { createContext, useCallback, useContext, ReactNode, useMemo, useRef } from 'react';
+import React, { createContext, useCallback, useContext, ReactNode, useEffect, useMemo, useRef } from 'react';
 import { useRecordingSessionController, UseRecordingSessionControllerReturn } from '@/hooks/useRecordingSessionController';
 
 type ModelSelectorModalHandler = (name: 'modelSelector', message?: string) => void;
@@ -26,6 +26,21 @@ export function RecordingSessionControllerProvider({ children }: RecordingSessio
   const controller = useRecordingSessionController((name, message) => {
     showModalRef.current?.(name, message);
   });
+
+  useEffect(() => {
+    const handleShortcutStop = () => {
+      if (!controller.isRecording) {
+        return;
+      }
+
+      void controller.handleStop();
+    };
+
+    window.addEventListener('request-stop-recording-shortcut', handleShortcutStop);
+    return () => {
+      window.removeEventListener('request-stop-recording-shortcut', handleShortcutStop);
+    };
+  }, [controller.handleStop, controller.isRecording]);
 
   const registerShowModal = useCallback((handler: ModelSelectorModalHandler) => {
     showModalRef.current = handler;

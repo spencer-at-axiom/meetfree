@@ -74,6 +74,9 @@ export default function RootLayout({
   // Setup global keyboard shortcuts
   useKeyboardShortcuts({
     onShowHelp: () => setShowShortcutsModal(true),
+    onStopRecording: () => {
+      window.dispatchEvent(new CustomEvent('request-stop-recording-shortcut'));
+    },
   })
   
   // Listen for custom event to show shortcuts modal (from TopBar)

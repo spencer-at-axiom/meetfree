@@ -1,8 +1,21 @@
 # QA Matrix
 
-This matrix covers the highest-risk meeting-copilot workflows after the April 8, 2026 stabilization pass.
+This matrix covers the highest-risk desktop regression workflows, verified against the current codebase on April 10, 2026.
 
-## Release Blocking Smoke Tests
+## Verification Snapshot
+
+| ID | Workflow | Status | Notes |
+| --- | --- | --- | --- |
+| 1 | Microphone-only recording | Verified in code | Start, pause, resume, stop, shutdown progress, and post-stop navigation all exist in the active recording flow. |
+| 2 | Microphone + system audio | Verified in code | Dual-source capture, readiness checks, and platform-specific loopback or monitor handling are implemented. |
+| 3 | Tray stop from another route | Verified in code | Tray stop calls the canonical backend finalization path and the UI listens for the resulting backend stop event. |
+| 4 | Keyboard shortcut stop from another route | Verified in code | A dedicated `Cmd/Ctrl+Shift+R` shortcut now dispatches a stop request and uses the shared recording finalization flow. |
+| 5 | Selected microphone disconnected | Verified in code | Readiness validates the saved microphone and blocks recording with a selected-device error when unavailable. |
+| 6 | Selected system audio source disconnected | Verified in code | Readiness validates the saved system-audio device and blocks recording when the selected source is unavailable. |
+| 7 | Reload during recording | Verified in code | Recording state re-syncs from the backend on mount and resumes polling when a recording is already active. |
+| 8 | IndexedDB recovery | Verified in code | Recovery detection, transcript preview, recovery save path, optional audio checkpoint recovery, and cleanup are implemented. |
+
+## Release-Blocking Regression Smoke Tests
 
 ### 1. Microphone Only Recording
 
@@ -41,12 +54,12 @@ This matrix covers the highest-risk meeting-copilot workflows after the April 8,
   4. Stop recording from the UI.
 - Expected:
   - Readiness reports the setup as recordable when the selected system-audio source is available.
-  - Recording starts without device-name mismatch errors.
+  - Recording starts without device-selection errors.
   - Stop finalizes cleanly and creates a meeting.
 
 ### 3. Tray Stop From Another Route
 
-- Goal: Verify global stop ownership works even when the user is not on the home page.
+- Goal: Verify non-home-route stop handling still converges on the canonical finalization flow.
 - Setup:
   - Start a recording from the home route.
   - Navigate to a different route such as Meetings or Settings.
@@ -62,15 +75,15 @@ This matrix covers the highest-risk meeting-copilot workflows after the April 8,
 
 ### 4. Keyboard Shortcut Stop From Another Route
 
-- Goal: Confirm non-UI stop paths converge on the same finalization flow.
+- Goal: Confirm the global stop shortcut converges on the same finalization flow even away from the record route.
 - Setup:
   - Start a recording.
   - Navigate away from the home route.
 - Steps:
-  1. Trigger the global stop shortcut.
+  1. Trigger `Cmd/Ctrl+Shift+R`.
   2. Wait for finalization to complete.
 - Expected:
-  - Stop uses the same finalization path as the UI stop button.
+  - Stop uses the same canonical finalization path as the UI and tray stop flows.
   - Meeting opens once after finalization.
   - No stale loading or orphaned recording state remains.
 
@@ -104,8 +117,6 @@ This matrix covers the highest-risk meeting-copilot workflows after the April 8,
   - Start is blocked if the selected system-audio source is unavailable.
   - The error refers to the selected source, not a generic platform or default-device message.
 
-## Confidence Checks
-
 ### 7. Reload During Recording
 
 - Goal: Confirm backend-synced recording state survives a page refresh.
@@ -118,6 +129,8 @@ This matrix covers the highest-risk meeting-copilot workflows after the April 8,
   - Recording state recovers without falling back to a false ready state.
   - Duration and paused state remain aligned with backend state.
 
+## Confidence Checks
+
 ### 8. IndexedDB Recovery
 
 - Goal: Confirm transcript recovery still works after an interrupted session.
@@ -127,15 +140,41 @@ This matrix covers the highest-risk meeting-copilot workflows after the April 8,
   3. Reopen the app and follow the recovery path.
 - Expected:
   - Recovery affordance appears when local transcript data exists.
+  - Transcript preview loads before recovery.
   - Recovered transcript is attached to the restored meeting flow.
+  - Audio recovery is attempted when checkpoint files are still available.
+
+### 9. Stop Finalization Deduplication
+
+- Goal: Confirm repeated stop signals still converge on one finalized meeting.
+- Setup:
+  - Start a recording.
+  - Use at least one non-UI stop source such as the tray menu.
+- Steps:
+  1. Trigger a stop action.
+  2. Observe the resulting meeting open flow and toast behavior.
+  3. Verify the app only finalizes once.
+- Expected:
+  - Only one meeting finalization result is processed.
+  - The app does not produce duplicate navigation, duplicate success toasts, or duplicate meeting refreshes.
 
 ## Sign-Off Rule
 
-- Automated gates must pass:
-  - `node scripts/check-tauri-command-contract.js`
-  - `pnpm.cmd --dir desktop lint`
-  - `pnpm.cmd --dir desktop test`
-  - `pnpm.cmd --dir desktop build`
-  - `cargo check -p meetfree --locked`
-  - `cargo test -p meetfree --lib --locked`
-- Manual sign-off requires all six release-blocking smoke tests above to pass on the target release build.
+- Automated gates must pass through the repo smoke scripts:
+  - Windows PowerShell: `pwsh -File scripts/release-smoke.ps1`
+  - macOS/Linux shell: `bash scripts/release-smoke.sh`
+- Manual sign-off requires all seven release-blocking smoke tests above to pass on the target release build.
+
+## Priority Action Checklist
+
+### P0
+
+- Add automated coverage for the new `Cmd/Ctrl+Shift+R` stop shortcut from a non-home route so the shipped behavior is tested end to end.
+- Add integration coverage for tray stop from a non-home route so both non-UI stop paths are verified beyond unit-level dedupe tests.
+- Add integration coverage for reload-during-recording recovery so backend re-sync is exercised in a real app flow.
+
+### P1
+
+- Add automated readiness tests for saved-device disconnect scenarios for both microphone and system-audio selections.
+- Consider promoting IndexedDB recovery to a scripted smoke flow if the test harness grows to support crash-and-relaunch scenarios.
+- Keep this matrix aligned with the release smoke scripts so the manual checklist and scripted gates do not drift.

@@ -264,7 +264,7 @@ describe('useRecordingSessionController', () => {
       expect(recordingService.onRecordingStopped).toHaveBeenCalled();
     });
 
-    // Keyboard stop path (Cmd/Ctrl+R routed to handleStop)
+    // Global stop shortcut path
     await act(async () => {
       await result.current.handleStop();
     });

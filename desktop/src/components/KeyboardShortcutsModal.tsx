@@ -2,7 +2,7 @@
 
 import { Dialog, DialogContent, DialogTitle } from '@/components/ui/dialog';
 import { getModifierKey } from '@/hooks/useKeyboardShortcuts';
-import { Mic, Search, Save, Settings, FileText, Sparkles, Download, Keyboard } from 'lucide-react';
+import { Mic, Search, Save, Settings, FileText, Sparkles, Square, Keyboard } from 'lucide-react';
 
 interface KeyboardShortcutsModalProps {
   isOpen: boolean;
@@ -53,6 +53,11 @@ export function KeyboardShortcutsModal({ isOpen, onClose }: KeyboardShortcutsMod
           icon: Save,
         },
         {
+          keys: [mod, 'Shift', 'R'],
+          description: 'Stop recording (while active)',
+          icon: Square,
+        },
+        {
           keys: [mod, '/'],
           description: 'Show keyboard shortcuts',
           icon: Keyboard,
@@ -71,11 +76,6 @@ export function KeyboardShortcutsModal({ isOpen, onClose }: KeyboardShortcutsMod
           keys: [mod, '2'],
           description: 'Switch to Summary tab',
           icon: Sparkles,
-        },
-        {
-          keys: [mod, '3'],
-          description: 'Switch to Export tab',
-          icon: Download,
         },
       ],
     },

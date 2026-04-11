@@ -45,7 +45,6 @@ export function RecordPage() {
     isRecording,
     isRecordingDisabled,
     onStart: handleStart,
-    onStop: handleStop,
   });
 
   const { recoveryDialogProps } = useRecordPageRecovery({

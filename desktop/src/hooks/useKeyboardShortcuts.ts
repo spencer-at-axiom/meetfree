@@ -5,6 +5,7 @@ interface UseKeyboardShortcutsOptions {
   onShowHelp?: () => void;
   onSave?: () => void;
   onTabSwitch?: (tabIndex: number) => void;
+  onStopRecording?: () => void;
 }
 
 export function useKeyboardShortcuts(options: UseKeyboardShortcutsOptions = {}) {
@@ -29,6 +30,12 @@ export function useKeyboardShortcuts(options: UseKeyboardShortcutsOptions = {}) 
       
       const isMac = navigator.platform.toUpperCase().indexOf('MAC') >= 0;
       const modifier = isMac ? e.metaKey : e.ctrlKey;
+
+      if (modifier && e.shiftKey && e.key.toLowerCase() === 'r') {
+        e.preventDefault();
+        options.onStopRecording?.();
+        return;
+      }
       
       // Global shortcuts (require Cmd/Ctrl)
       if (modifier) {
@@ -78,12 +85,6 @@ export function useKeyboardShortcuts(options: UseKeyboardShortcutsOptions = {}) 
             }
             break;
             
-          case '3':
-            if (pathname?.includes('/meeting-details')) {
-              e.preventDefault();
-              options.onTabSwitch?.(2); // Export
-            }
-            break;
         }
       }
     };
