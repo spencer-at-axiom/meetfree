@@ -1,0 +1,107 @@
+name: Merge Gate
+
+on:
+  pull_request:
+  push:
+    branches:
+      - main
+      - devtest
+
+permissions:
+  contents: read
+
+jobs:
+  frontend:
+    name: Frontend
+    runs-on: ubuntu-24.04
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Setup pnpm
+        uses: pnpm/action-setup@v4
+        with:
+          version: 8
+          run_install: false
+
+      - name: Setup Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+          cache: 'pnpm'
+          cache-dependency-path: desktop/pnpm-lock.yaml
+
+      - name: Install dependencies
+        run: pnpm --dir desktop install --frozen-lockfile
+
+      - name: Verify Tauri command contract
+        run: node ../scripts/check-tauri-command-contract.js
+        working-directory: desktop
+
+      - name: Lint
+        run: pnpm --dir desktop lint
+
+      - name: Tests
+        run: pnpm --dir desktop test
+
+      - name: Build
+        run: pnpm --dir desktop build
+
+  rust:
+    name: Rust
+    runs-on: ubuntu-24.04
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Install system dependencies
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y \
+            cmake \
+            libappindicator3-dev \
+            librsvg2-dev \
+            patchelf \
+            libasound2-dev \
+            libopenblas-dev \
+            libx11-dev \
+            libxtst-dev \
+            libxrandr-dev \
+            libwebkit2gtk-4.1-0=2.44.0-2 \
+            libwebkit2gtk-4.1-dev=2.44.0-2 \
+            libjavascriptcoregtk-4.1-0=2.44.0-2 \
+            libjavascriptcoregtk-4.1-dev=2.44.0-2 \
+            gir1.2-javascriptcoregtk-4.1=2.44.0-2 \
+            gir1.2-webkit2-4.1=2.44.0-2
+
+      - name: Install Rust stable
+        uses: dtolnay/rust-toolchain@stable
+        with:
+          components: rustfmt, clippy
+
+      - name: Rust cache
+        uses: swatinem/rust-cache@v2
+
+      - name: Cargo check
+        run: cargo check -p meetfree --locked
+
+      - name: Cargo lib tests
+        run: cargo test -p meetfree --lib --locked
+
+  merge-gate:
+    name: Merge Gate
+    runs-on: ubuntu-24.04
+    needs:
+      - frontend
+      - rust
+    if: ${{ always() }}
+    steps:
+      - name: Verify required checks
+        run: |
+          if [ "${{ needs.frontend.result }}" != "success" ] || [ "${{ needs.rust.result }}" != "success" ]; then
+            echo "Required checks failed."
+            echo "frontend=${{ needs.frontend.result }}"
+            echo "rust=${{ needs.rust.result }}"
+            exit 1
+          fi
+          echo "All required checks passed."

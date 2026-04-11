@@ -1,0 +1,250 @@
+// Backend configuration for system audio capture
+use log::info;
+use once_cell::sync::Lazy;
+use serde::{Deserialize, Serialize};
+use std::sync::{Arc, RwLock, RwLockReadGuard, RwLockWriteGuard};
+
+/// Available audio capture backends
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "lowercase")]
+pub enum AudioCaptureBackend {
+    /// Default system-audio backend label for the standard CPAL path.
+    /// Core Audio is selected separately on macOS when the direct tap path is used.
+    ScreenCaptureKit,
+
+    /// Core Audio backend (macOS only)
+    /// Uses direct Core Audio API with aggregate device + tap
+    #[cfg(target_os = "macos")]
+    CoreAudio,
+}
+
+impl AudioCaptureBackend {
+    /// Get human-readable name
+    pub fn name(&self) -> &'static str {
+        match self {
+            AudioCaptureBackend::ScreenCaptureKit => "ScreenCaptureKit",
+            #[cfg(target_os = "macos")]
+            AudioCaptureBackend::CoreAudio => "Core Audio",
+        }
+    }
+
+    /// Get description
+    pub fn description(&self) -> &'static str {
+        match self {
+            AudioCaptureBackend::ScreenCaptureKit => {
+                "Apple's ScreenCaptureKit framework - Higher level API with good compatibility"
+            }
+            #[cfg(target_os = "macos")]
+            AudioCaptureBackend::CoreAudio => {
+                "Direct Core Audio API - Lower latency, more control over audio pipeline"
+            }
+        }
+    }
+
+    /// Get backend from string
+    pub fn from_string(s: &str) -> Option<Self> {
+        match s.to_lowercase().as_str() {
+            "screencapturekit" => Some(AudioCaptureBackend::ScreenCaptureKit),
+            #[cfg(target_os = "macos")]
+            "coreaudio" | "core_audio" => Some(AudioCaptureBackend::CoreAudio),
+            _ => None,
+        }
+    }
+
+    /// Stable storage key used for persisted preferences and commands.
+    pub fn as_storage_key(&self) -> &'static str {
+        match self {
+            AudioCaptureBackend::ScreenCaptureKit => "screencapturekit",
+            #[cfg(target_os = "macos")]
+            AudioCaptureBackend::CoreAudio => "coreaudio",
+        }
+    }
+
+    /// Get all available backends for current platform
+    pub fn available_backends() -> Vec<Self> {
+        #[cfg(target_os = "macos")]
+        {
+            vec![
+                AudioCaptureBackend::ScreenCaptureKit,
+                AudioCaptureBackend::CoreAudio,
+            ]
+        }
+
+        #[cfg(not(target_os = "macos"))]
+        {
+            vec![AudioCaptureBackend::ScreenCaptureKit]
+        }
+    }
+
+    /// Get the platform-default backend.
+    pub fn platform_default() -> Self {
+        #[cfg(target_os = "macos")]
+        return AudioCaptureBackend::CoreAudio;
+
+        #[cfg(not(target_os = "macos"))]
+        return AudioCaptureBackend::ScreenCaptureKit;
+    }
+}
+
+impl Default for AudioCaptureBackend {
+    fn default() -> Self {
+        Self::platform_default()
+    }
+}
+
+impl std::fmt::Display for AudioCaptureBackend {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        write!(f, "{}", self.as_storage_key())
+    }
+}
+
+/// Global backend configuration
+pub struct BackendConfig {
+    current_backend: RwLock<AudioCaptureBackend>,
+}
+
+impl BackendConfig {
+    fn read_backend(&self) -> RwLockReadGuard<'_, AudioCaptureBackend> {
+        self.current_backend.read().unwrap_or_else(|poisoned| {
+            log::warn!("Recovering from poisoned audio backend config read lock");
+            poisoned.into_inner()
+        })
+    }
+
+    fn write_backend(&self) -> RwLockWriteGuard<'_, AudioCaptureBackend> {
+        self.current_backend.write().unwrap_or_else(|poisoned| {
+            log::warn!("Recovering from poisoned audio backend config write lock");
+            poisoned.into_inner()
+        })
+    }
+
+    fn new() -> Self {
+        Self {
+            current_backend: RwLock::new(AudioCaptureBackend::default()),
+        }
+    }
+
+    /// Get current backend
+    pub fn get(&self) -> AudioCaptureBackend {
+        *self.read_backend()
+    }
+
+    /// Set current backend
+    pub fn set(&self, backend: AudioCaptureBackend) {
+        info!("Switching audio capture backend to: {:?}", backend);
+        *self.write_backend() = backend;
+    }
+
+    /// Get available backends
+    pub fn available(&self) -> Vec<AudioCaptureBackend> {
+        AudioCaptureBackend::available_backends()
+    }
+
+    /// Reset to default
+    pub fn reset(&self) {
+        self.set(AudioCaptureBackend::default());
+    }
+}
+
+/// Global backend configuration instance
+pub static BACKEND_CONFIG: Lazy<Arc<BackendConfig>> = Lazy::new(|| Arc::new(BackendConfig::new()));
+
+/// Get current backend
+pub fn get_current_backend() -> AudioCaptureBackend {
+    BACKEND_CONFIG.get()
+}
+
+/// Set current backend
+pub fn set_current_backend(backend: AudioCaptureBackend) {
+    BACKEND_CONFIG.set(backend);
+}
+
+/// Get available backends
+pub fn get_available_backends() -> Vec<AudioCaptureBackend> {
+    BACKEND_CONFIG.available()
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn test_backend_to_string() {
+        assert_eq!(
+            AudioCaptureBackend::ScreenCaptureKit.to_string(),
+            "screencapturekit"
+        );
+        #[cfg(target_os = "macos")]
+        assert_eq!(AudioCaptureBackend::CoreAudio.to_string(), "coreaudio");
+    }
+
+    #[test]
+    fn test_backend_from_string() {
+        assert_eq!(
+            AudioCaptureBackend::from_string("screencapturekit"),
+            Some(AudioCaptureBackend::ScreenCaptureKit)
+        );
+        #[cfg(target_os = "macos")]
+        {
+            assert_eq!(
+                AudioCaptureBackend::from_string("coreaudio"),
+                Some(AudioCaptureBackend::CoreAudio)
+            );
+            assert_eq!(
+                AudioCaptureBackend::from_string("core_audio"),
+                Some(AudioCaptureBackend::CoreAudio)
+            );
+        }
+    }
+
+    #[test]
+    fn test_available_backends() {
+        let backends = AudioCaptureBackend::available_backends();
+        assert!(backends.contains(&AudioCaptureBackend::ScreenCaptureKit));
+
+        #[cfg(target_os = "macos")]
+        assert!(backends.contains(&AudioCaptureBackend::CoreAudio));
+    }
+
+    #[test]
+    fn test_default_backend() {
+        #[cfg(target_os = "macos")]
+        assert_eq!(
+            AudioCaptureBackend::default(),
+            AudioCaptureBackend::CoreAudio
+        );
+
+        #[cfg(not(target_os = "macos"))]
+        assert_eq!(
+            AudioCaptureBackend::default(),
+            AudioCaptureBackend::ScreenCaptureKit
+        );
+    }
+
+    #[test]
+    fn test_backend_config() {
+        let config = BackendConfig::new();
+
+        // Should start with default
+        #[cfg(target_os = "macos")]
+        assert_eq!(config.get(), AudioCaptureBackend::CoreAudio);
+
+        #[cfg(not(target_os = "macos"))]
+        assert_eq!(config.get(), AudioCaptureBackend::ScreenCaptureKit);
+
+        #[cfg(target_os = "macos")]
+        {
+            // Test setting CoreAudio
+            config.set(AudioCaptureBackend::CoreAudio);
+            assert_eq!(config.get(), AudioCaptureBackend::CoreAudio);
+        }
+
+        // Test reset
+        config.reset();
+        #[cfg(target_os = "macos")]
+        assert_eq!(config.get(), AudioCaptureBackend::CoreAudio);
+
+        #[cfg(not(target_os = "macos"))]
+        assert_eq!(config.get(), AudioCaptureBackend::ScreenCaptureKit);
+    }
+}

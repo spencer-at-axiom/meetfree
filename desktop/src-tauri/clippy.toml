@@ -1,0 +1,4 @@
+# Align with workspace MSRV and Tauri command surface (many #[command] handlers exceed 7 args).
+msrv = "1.80"
+too-many-arguments-threshold = 12
+type-complexity-threshold = 600

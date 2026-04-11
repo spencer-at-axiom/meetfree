@@ -1,0 +1,541 @@
+'use client';
+
+import React, { createContext, useContext, useState, useEffect, useRef, useCallback, useMemo } from 'react';
+import { invoke } from '@tauri-apps/api/core';
+import { listen } from '@tauri-apps/api/event';
+import type { PermissionStatus, OnboardingPermissions } from '@/types/onboarding';
+import {
+  DownloadableModelStatus,
+  isDownloadingStatus,
+} from '@/lib/transcriptionModelStatus';
+
+const PARAKEET_MODEL = 'parakeet-tdt-0.6b-v3-int8';
+
+interface OnboardingStatus {
+  version: string;
+  completed: boolean;
+  current_step: number;
+  model_status: {
+    parakeet: string;
+    summary: string;
+  };
+  last_updated: string;
+}
+
+interface SummaryModelProgressInfo {
+  percent: number;
+  downloadedMb: number;
+  totalMb: number;
+  speedMbps: number;
+}
+
+interface ParakeetProgressInfo {
+  percent: number;
+  downloadedMb: number;
+  totalMb: number;
+  speedMbps: number;
+}
+
+interface ParakeetModelInfo {
+  status?: DownloadableModelStatus;
+}
+
+interface OnboardingContextType {
+  currentStep: number;
+  parakeetDownloaded: boolean;
+  parakeetProgress: number;
+  parakeetProgressInfo: ParakeetProgressInfo;
+  summaryModelDownloaded: boolean;
+  summaryModelProgress: number;
+  summaryModelProgressInfo: SummaryModelProgressInfo;
+  selectedSummaryModel: string;
+  databaseExists: boolean;
+  isBackgroundDownloading: boolean;
+  // Permissions
+  permissions: OnboardingPermissions;
+  permissionsSkipped: boolean;
+  // Navigation
+  goToStep: (step: number) => void;
+  goNext: () => void;
+  goPrevious: () => void;
+  // Setters
+  setParakeetDownloaded: (value: boolean) => void;
+  setSummaryModelDownloaded: (value: boolean) => void;
+  setSelectedSummaryModel: (value: string) => void;
+  setDatabaseExists: (value: boolean) => void;
+  setPermissionStatus: (permission: keyof OnboardingPermissions, status: PermissionStatus) => void;
+  setPermissionsSkipped: (skipped: boolean) => void;
+  completeOnboarding: () => Promise<void>;
+  startBackgroundDownloads: (includeGemma: boolean) => Promise<void>;
+  retryParakeetDownload: () => Promise<void>;
+}
+
+const OnboardingContext = createContext<OnboardingContextType | undefined>(undefined);
+
+export function OnboardingProvider({ children }: { children: React.ReactNode }) {
+  const [currentStep, setCurrentStep] = useState(1);
+  const [completed, setCompleted] = useState(false);
+  const [parakeetDownloaded, setParakeetDownloaded] = useState(false);
+  const [parakeetProgress, setParakeetProgress] = useState(0);
+  const [parakeetProgressInfo, setParakeetProgressInfo] = useState<ParakeetProgressInfo>({
+    percent: 0,
+    downloadedMb: 0,
+    totalMb: 0,
+    speedMbps: 0,
+  });
+  const [summaryModelDownloaded, setSummaryModelDownloaded] = useState(false);
+  const [summaryModelProgress, setSummaryModelProgress] = useState(0);
+  const [summaryModelProgressInfo, setSummaryModelProgressInfo] = useState<SummaryModelProgressInfo>({
+    percent: 0,
+    downloadedMb: 0,
+    totalMb: 0,
+    speedMbps: 0,
+  });
+  const [selectedSummaryModel, setSelectedSummaryModel] = useState<string>('gemma3:1b');
+  const [databaseExists, setDatabaseExists] = useState(false);
+  const [isBackgroundDownloading, setIsBackgroundDownloading] = useState(false);
+
+  // Permissions state
+  const [permissions, setPermissions] = useState<OnboardingPermissions>({
+    microphone: 'not_determined',
+    systemAudio: 'not_determined',
+    screenRecording: 'not_determined',
+  });
+  const [permissionsSkipped, setPermissionsSkipped] = useState(false);
+
+  const saveTimeoutRef = useRef<NodeJS.Timeout>();
+
+  // Load status on mount and initialize database
+  useEffect(() => {
+    loadOnboardingStatus();
+    checkDatabaseStatus();
+    initializeDatabaseInBackground();
+
+    // Fetch and set recommended Ollama model
+    const fetchRecommendation = async () => {
+      try {
+        // Use a recommended Ollama model for local summaries
+        const recommendedModel = 'gemma3:1b'; // Default recommended model
+        setSelectedSummaryModel(recommendedModel);
+        console.log('[OnboardingContext] Set recommended model:', recommendedModel);
+      } catch (error) {
+        console.error('[OnboardingContext] Failed to get recommended model:', error);
+        // Keep default gemma3:1b
+      }
+    };
+    fetchRecommendation();
+  }, []);
+
+  // Initialize database silently in background (moved from SetupOverviewStep)
+  const initializeDatabaseInBackground = async () => {
+    try {
+      console.log('[OnboardingContext] Starting background database initialization');
+      const isFirstLaunch = await invoke<boolean>('check_first_launch');
+
+      if (!isFirstLaunch) {
+        console.log('[OnboardingContext] Database exists, skipping initialization');
+        setDatabaseExists(true);
+        return;
+      }
+
+      await invoke('initialize_fresh_database');
+      setDatabaseExists(true);
+    } catch (error) {
+      console.error('[OnboardingContext] Database initialization failed:', error);
+      // Don't throw - database init failure shouldn't block onboarding
+    }
+  };
+
+  const isCompletingRef = useRef(false);
+
+  // Auto-save on state change (debounced)
+  useEffect(() => {
+    if (saveTimeoutRef.current) clearTimeout(saveTimeoutRef.current);
+
+    // Don't auto-save if completed (to avoid overwriting completion status)
+    // Also don't auto-save if we are currently in the process of completing
+    if (completed || isCompletingRef.current) return;
+
+    saveTimeoutRef.current = setTimeout(() => {
+      saveOnboardingStatus();
+    }, 1000);
+
+    return () => {
+      if (saveTimeoutRef.current) clearTimeout(saveTimeoutRef.current);
+    };
+  }, [currentStep, parakeetDownloaded, summaryModelDownloaded, completed]);
+
+  // Listen to Parakeet download progress
+  useEffect(() => {
+    const unlisten = listen<{
+      modelName: string;
+      progress: number;
+      downloaded_mb?: number;
+      total_mb?: number;
+      speed_mbps?: number;
+      status?: string;
+    }>(
+      'parakeet-model-download-progress',
+      (event) => {
+        const { modelName, progress, downloaded_mb, total_mb, speed_mbps, status } = event.payload;
+        if (modelName === PARAKEET_MODEL) {
+          setParakeetProgress(progress);
+          setParakeetProgressInfo({
+            percent: progress,
+            downloadedMb: downloaded_mb ?? 0,
+            totalMb: total_mb ?? 0,
+            speedMbps: speed_mbps ?? 0,
+          });
+          if (status === 'completed' || progress >= 100) {
+            setParakeetDownloaded(true);
+          }
+        }
+      }
+    );
+
+    const unlistenComplete = listen<{ modelName: string }>(
+      'parakeet-model-download-complete',
+      (event) => {
+        const { modelName } = event.payload;
+        if (modelName === PARAKEET_MODEL) {
+          setParakeetDownloaded(true);
+          setParakeetProgress(100);
+        }
+      }
+    );
+
+    const unlistenError = listen<{ modelName: string; error: string }>(
+      'parakeet-model-download-error',
+      (event) => {
+        const { modelName } = event.payload;
+        if (modelName === PARAKEET_MODEL) {
+          console.error('Parakeet download error:', event.payload.error);
+        }
+      }
+    );
+
+    return () => {
+      unlisten.then(fn => fn());
+      unlistenComplete.then(fn => fn());
+      unlistenError.then(fn => fn());
+    };
+  }, []);
+
+  // Listen to Ollama model download progress
+  useEffect(() => {
+    const unlisten = listen<{
+      model: string;
+      progress: number;
+      downloaded_mb?: number;
+      total_mb?: number;
+      speed_mbps?: number;
+      status: string;
+    }>(
+      'ollama-model-download-progress',
+      (event) => {
+        const { model, progress, downloaded_mb, total_mb, speed_mbps, status } = event.payload;
+        // Check if this is the selected summary model (gemma3:1b or gemma3:4b)
+        if (model === selectedSummaryModel || model === 'gemma3:1b' || model === 'gemma3:4b') {
+          setSummaryModelProgress(progress);
+          setSummaryModelProgressInfo({
+            percent: progress,
+            downloadedMb: downloaded_mb ?? 0,
+            totalMb: total_mb ?? 0,
+            speedMbps: speed_mbps ?? 0,
+          });
+          if (status === 'completed' || progress >= 100) {
+            setSummaryModelDownloaded(true);
+          }
+        }
+      }
+    );
+
+    return () => {
+      unlisten.then(fn => fn());
+    };
+  }, [selectedSummaryModel]);
+
+  const checkDatabaseStatus = async () => {
+    try {
+      const isFirstLaunch = await invoke<boolean>('check_first_launch');
+      setDatabaseExists(!isFirstLaunch);
+      console.log('[OnboardingContext] Database exists:', !isFirstLaunch);
+    } catch (error) {
+      console.error('[OnboardingContext] Failed to check database status:', error);
+      setDatabaseExists(false);
+    }
+  };
+
+  const loadOnboardingStatus = async () => {
+    try {
+      const status = await invoke<OnboardingStatus | null>('get_onboarding_status');
+      if (status) {
+        console.log('[OnboardingContext] Loaded saved status:', status);
+
+        // Don't trust saved status - verify actual model status on disk
+        const verifiedStatus = await verifyModelStatus(status);
+
+        setCurrentStep(verifiedStatus.currentStep);
+        setCompleted(verifiedStatus.completed);
+        setParakeetDownloaded(verifiedStatus.parakeetDownloaded);
+        setSummaryModelDownloaded(verifiedStatus.summaryModelDownloaded);
+
+        console.log('[OnboardingContext] Verified status:', verifiedStatus);
+
+        // Check if any downloads are active to restore isBackgroundDownloading state
+        await checkActiveDownloads();
+      }
+    } catch (error) {
+      console.error('[OnboardingContext] Failed to load onboarding status:', error);
+    }
+  };
+
+  // Verify that models actually exist on disk, not just trust saved JSON
+  const verifyModelStatus = async (savedStatus: OnboardingStatus) => {
+    let parakeetDownloaded = false;
+    let summaryModelDownloaded = false;
+
+    // Verify Parakeet model exists on disk
+    try {
+      await invoke('parakeet_init');
+      parakeetDownloaded = await invoke<boolean>('parakeet_has_available_models');
+      console.log('[OnboardingContext] Parakeet verified on disk:', parakeetDownloaded);
+    } catch (error) {
+      console.warn('[OnboardingContext] Failed to verify Parakeet:', error);
+      parakeetDownloaded = false;
+    }
+
+    // Verify Summary model exists on disk - check if ANY Ollama model is available
+    // Onboarding always uses Ollama (local models)
+    try {
+      const models = await invoke<any[]>('get_ollama_models', { endpoint: null });
+      const availableModel = models.length > 0 ? models[0].name : null;
+      summaryModelDownloaded = !!availableModel;
+      console.log('[OnboardingContext] Summary model verified on disk:', summaryModelDownloaded, 'model:', availableModel);
+    } catch (error) {
+      console.warn('[OnboardingContext] Failed to verify Summary model:', error);
+      summaryModelDownloaded = false;
+    }
+
+    // Determine the correct step based on verified status
+    // Simplified flow: Step 1: Welcome, Step 2: Download Progress, Step 3: Permissions (macOS)
+    let currentStep = savedStatus.current_step;
+    const completed = savedStatus.completed;
+
+    // Clamp step to new max (3)
+    if (currentStep > 3) {
+      currentStep = 3;
+    }
+
+    // Trust the completed status - don't revert based on model downloads
+    // Downloads continue in background; user stays in main app regardless
+    return {
+      currentStep,
+      completed,
+      parakeetDownloaded,
+      summaryModelDownloaded,
+    };
+  };
+
+  const saveOnboardingStatus = async () => {
+    // Safety check: if we are in the process of completing, DO NOT save
+    // This prevents a race condition where a download completion event triggers a save
+    // that overwrites the "completed" status set by completeOnboarding
+    if (isCompletingRef.current) {
+      console.log('[OnboardingContext] Skipping saveOnboardingStatus because completion is in progress');
+      return;
+    }
+
+    try {
+      await invoke('save_onboarding_status_cmd', {
+        status: {
+          version: '1.0',
+          completed: completed,
+          current_step: currentStep,
+          model_status: {
+            parakeet: parakeetDownloaded ? 'downloaded' : 'not_downloaded',
+            summary: summaryModelDownloaded ? 'downloaded' : 'not_downloaded',
+          },
+          last_updated: new Date().toISOString(),
+        },
+      });
+    } catch (error) {
+      console.error('[OnboardingContext] Failed to save onboarding status:', error);
+    }
+  };
+
+  const completeOnboarding = useCallback(async () => {
+    try {
+      // Set completion flag to prevent race conditions with auto-save
+      isCompletingRef.current = true;
+
+      // Clear any pending auto-saves
+      if (saveTimeoutRef.current) {
+        clearTimeout(saveTimeoutRef.current);
+        saveTimeoutRef.current = undefined;
+      }
+
+      // Onboarding always uses Ollama with selected model
+      await invoke('complete_onboarding', {
+        model: selectedSummaryModel,
+      });
+      setCompleted(true);
+      console.log('[OnboardingContext] Onboarding completed with Ollama model:', selectedSummaryModel);
+
+      // Reset the flag so subsequent state updates can be saved
+      isCompletingRef.current = false;
+    } catch (error) {
+      console.error('[OnboardingContext] Failed to complete onboarding:', error);
+      isCompletingRef.current = false; // Reset flag on error
+      throw error; // Re-throw so PermissionsStep can handle it
+    }
+  }, [selectedSummaryModel]);
+
+  // Start background downloads for models (parallel - Parakeet first, then Gemma immediately)
+  const startBackgroundDownloads = useCallback(async (includeGemma: boolean) => {
+    console.log('[OnboardingContext] Starting background downloads, includeGemma:', includeGemma);
+    setIsBackgroundDownloading(true);
+
+    try {
+      // Start Parakeet download first (speech recognition - always required)
+      if (!parakeetDownloaded) {
+        console.log('[OnboardingContext] Starting Parakeet download');
+        invoke('parakeet_download_model', { modelName: PARAKEET_MODEL })
+          .catch(err => console.error('[OnboardingContext] Parakeet download failed:', err));
+      }
+
+      // Start Ollama model download after a delay to prioritize Parakeet bandwidth
+      if (includeGemma && !summaryModelDownloaded) {
+        setTimeout(() => {
+          console.log('[OnboardingContext] Starting Ollama model download (delayed to prioritize Parakeet)');
+          invoke('pull_ollama_model', { modelName: selectedSummaryModel || 'gemma3:1b' })
+            .catch(err => console.error('[OnboardingContext] Ollama model download failed:', err));
+        }, 3000); // 3 second delay to give Parakeet priority
+      }
+    } catch (error) {
+      console.error('[OnboardingContext] Failed to start background downloads:', error);
+      setIsBackgroundDownloading(false);
+      throw error;
+    }
+  }, [parakeetDownloaded, selectedSummaryModel, summaryModelDownloaded]);
+
+  // Check if any models are currently downloading (for re-entry)
+  const checkActiveDownloads = async () => {
+    try {
+      const models = await invoke<ParakeetModelInfo[]>('parakeet_get_available_models');
+      const isDownloading = models.some((model) =>
+        model.status ? isDownloadingStatus(model.status) : false
+      );
+      
+      if (isDownloading) {
+        console.log('[OnboardingContext] Detected active background downloads on mount');
+        setIsBackgroundDownloading(true);
+      }
+      
+      // We prioritize Parakeet status here because it is the hard requirement for recording.
+      
+    } catch (error) {
+      console.warn('[OnboardingContext] Failed to check active downloads:', error);
+    }
+  };
+
+  const retryParakeetDownload = useCallback(async () => {
+    console.log('[OnboardingContext] Retrying Parakeet download');
+    try {
+      await invoke('parakeet_retry_download', { modelName: PARAKEET_MODEL });
+    } catch (error) {
+      console.error('[OnboardingContext] Retry failed:', error);
+      throw error;
+    }
+  }, []);
+
+  const setPermissionStatus = useCallback((permission: keyof OnboardingPermissions, status: PermissionStatus) => {
+    setPermissions((prev: OnboardingPermissions) => ({
+      ...prev,
+      [permission]: status,
+    }));
+  }, []);
+
+  const goToStep = useCallback((step: number) => {
+    setCurrentStep(Math.max(1, Math.min(step, 3)));
+  }, []);
+
+  const goNext = useCallback(() => {
+    setCurrentStep((prev: number) => {
+      const next = prev + 1;
+      // Don't go past step 3
+      return Math.min(next, 3);
+    });
+  }, []);
+
+  const goPrevious = useCallback(() => {
+    setCurrentStep((prev: number) => {
+      const previous = prev - 1;
+      // Don't go below step 1
+      return Math.max(previous, 1);
+    });
+  }, []);
+
+  const value = useMemo<OnboardingContextType>(() => ({
+    currentStep,
+    parakeetDownloaded,
+    parakeetProgress,
+    parakeetProgressInfo,
+    summaryModelDownloaded,
+    summaryModelProgress,
+    summaryModelProgressInfo,
+    selectedSummaryModel,
+    databaseExists,
+    isBackgroundDownloading,
+    permissions,
+    permissionsSkipped,
+    goToStep,
+    goNext,
+    goPrevious,
+    setParakeetDownloaded,
+    setSummaryModelDownloaded,
+    setSelectedSummaryModel,
+    setDatabaseExists,
+    setPermissionStatus,
+    setPermissionsSkipped,
+    completeOnboarding,
+    startBackgroundDownloads,
+    retryParakeetDownload,
+  }), [
+    currentStep,
+    parakeetDownloaded,
+    parakeetProgress,
+    parakeetProgressInfo,
+    summaryModelDownloaded,
+    summaryModelProgress,
+    summaryModelProgressInfo,
+    selectedSummaryModel,
+    databaseExists,
+    isBackgroundDownloading,
+    permissions,
+    permissionsSkipped,
+    goToStep,
+    goNext,
+    goPrevious,
+    setPermissionStatus,
+    completeOnboarding,
+    startBackgroundDownloads,
+    retryParakeetDownload,
+  ]);
+
+  return (
+    <OnboardingContext.Provider
+      value={value}
+    >
+      {children}
+    </OnboardingContext.Provider>
+  );
+}
+
+export function useOnboarding() {
+  const context = useContext(OnboardingContext);
+  if (!context) {
+    throw new Error('useOnboarding must be used within OnboardingProvider');
+  }
+  return context;
+}
