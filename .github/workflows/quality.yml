@@ -27,16 +27,15 @@ jobs:
       - name: Setup Node
         uses: actions/setup-node@v4
         with:
-          node-version: '20'
-          cache: 'pnpm'
+          node-version: "20"
+          cache: "pnpm"
           cache-dependency-path: desktop/pnpm-lock.yaml
 
       - name: Install dependencies
         run: pnpm --dir desktop install --frozen-lockfile
 
       - name: Verify Tauri command contract
-        run: node ../scripts/check-tauri-command-contract.js
-        working-directory: desktop
+        run: node scripts/check-tauri-command-contract.js
 
       - name: Lint
         run: pnpm --dir desktop lint

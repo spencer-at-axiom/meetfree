@@ -1,3 +1,6 @@
+# Quick multi-platform signed build test (workflow_dispatch only).
+# Delegates to .github/workflows/build.yml for all platforms.
+
 name: "Build Test"
 
 on: workflow_dispatch
@@ -10,18 +13,18 @@ jobs:
       fail-fast: false
       matrix:
         include:
-          - platform: "macos-latest" # for Apple Silicon only (M1 and above)
-            args: "--target aarch64-apple-darwin"
+          - platform: "macos-latest"
             target: "aarch64-apple-darwin"
-          - platform: "ubuntu-22.04" # Build .deb on 22.04
-            args: "--bundles deb"
-            target: "x86_64-unknown-linux-gnu"
-          - platform: "ubuntu-24.04" # Build AppImage and RPM on 24.04
-            args: "--bundles appimage,rpm"
-            target: "x86_64-unknown-linux-gnu"
-          - platform: "windows-latest"
             args: ""
+          - platform: "ubuntu-22.04"
+            target: "x86_64-unknown-linux-gnu"
+            args: "--bundles deb"
+          - platform: "ubuntu-24.04"
+            target: "x86_64-unknown-linux-gnu"
+            args: "--bundles appimage,rpm"
+          - platform: "windows-latest"
             target: "x86_64-pc-windows-msvc"
+            args: ""
 
     uses: ./.github/workflows/build.yml
     with:
@@ -31,5 +34,4 @@ jobs:
       sign-binaries: true
       asset-prefix: "meetfree-test"
       upload-artifacts: true
-      is-debug-build: ${{ contains(matrix.args, '--debug') }}
     secrets: inherit

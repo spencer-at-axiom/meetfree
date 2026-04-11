@@ -1,4 +1,4 @@
-﻿# Manual Linux builds for MeetFree (Tauri + OpenBLAS CPU path, per desktop/src-tauri/Cargo.toml).
+﻿# Manual Linux builds for MeetFree (Tauri + OpenBLAS CPU path).
 # Delegates to .github/workflows/build.yml — keep logic in one place.
 
 name: Build and Test - Linux
@@ -7,7 +7,7 @@ on:
   workflow_dispatch:
     inputs:
       build-type:
-        description: 'Cargo profile'
+        description: "Cargo profile"
         required: true
         type: choice
         options:
@@ -15,7 +15,7 @@ on:
           - release
         default: release
       ubuntu-version:
-        description: 'GitHub-hosted Ubuntu image'
+        description: "GitHub-hosted Ubuntu image"
         required: true
         type: choice
         options:
@@ -23,7 +23,7 @@ on:
           - ubuntu-24.04
         default: ubuntu-22.04
       bundle-type:
-        description: 'Linux bundle targets (all = deb on 22.04, appimage+rpm on 24.04)'
+        description: "Linux bundle targets (all = deb on 22.04, appimage+rpm on 24.04)"
         required: true
         type: choice
         options:
@@ -33,7 +33,7 @@ on:
           - all
         default: all
       upload-artifacts:
-        description: 'Upload build artifacts to the workflow run'
+        description: "Upload build artifacts to the workflow run"
         required: true
         type: boolean
         default: true
@@ -41,12 +41,6 @@ on:
 concurrency:
   group: ${{ github.workflow }}-${{ github.ref }}
   cancel-in-progress: true
-
-env:
-  RUST_BACKTRACE: 1
-  CARGO_TERM_COLOR: always
-  WHISPER_NO_AVX: ON
-  WHISPER_NO_AVX2: ON
 
 jobs:
   prepare:
@@ -62,9 +56,8 @@ jobs:
           set -euo pipefail
           UBUNTU="${{ github.event.inputs.ubuntu-version || 'ubuntu-22.04' }}"
           BUNDLE="${{ github.event.inputs.bundle-type }}"
-          BT="${{ github.event.inputs.build-type }}"
 
-          if [[ "$BT" == "debug" ]]; then
+          if [[ "${{ github.event.inputs.build-type }}" == "debug" ]]; then
             echo "is-debug=true" >> "$GITHUB_OUTPUT"
           else
             echo "is-debug=false" >> "$GITHUB_OUTPUT"
@@ -98,6 +91,6 @@ jobs:
       build-args: ${{ needs.prepare.outputs.build-args }}
       is-debug-build: ${{ needs.prepare.outputs.is-debug == 'true' }}
       asset-prefix: meetfree-linux
-      upload-artifacts: ${{ github.event.inputs.upload-artifacts }}
+      upload-artifacts: ${{ github.event.inputs.upload-artifacts == 'true' }}
       sign-binaries: false
     secrets: inherit
