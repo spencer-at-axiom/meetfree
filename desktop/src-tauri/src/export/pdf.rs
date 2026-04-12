@@ -88,7 +88,22 @@ pub fn build_pdf_document(context: &ExportContext) -> Result<Vec<u8>, String> {
         }
     }
 
+    if !context.tags.is_empty() {
+        document.push(elements::Paragraph::new(format!(
+            "Tags: {}",
+            context.tags.join(", ")
+        )));
+    }
+
     document.push(elements::Paragraph::new(""));
+
+    if let Some(ref scratchpad) = context.scratchpad {
+        document.push(elements::Paragraph::new("Meeting Notes"));
+        for line in scratchpad.lines() {
+            document.push(elements::Paragraph::new(line));
+        }
+        document.push(elements::Paragraph::new(""));
+    }
 
     // Summary section
     if !context.summary_markdown.is_empty() {

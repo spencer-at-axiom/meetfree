@@ -25,6 +25,7 @@ pub struct TranscriptSearchFilters {
     pub date_to: Option<String>,
     pub source_type: Option<String>,
     pub has_summary: Option<bool>,
+    pub tag_id: Option<String>,
     pub limit: i64,
     pub offset: i64,
 }
@@ -185,7 +186,8 @@ impl TranscriptsRepository {
                     ? IS NULL OR
                     (? = 1 AND EXISTS(SELECT 1 FROM summary_processes sp WHERE sp.meeting_id = m.id AND sp.result IS NOT NULL)) OR
                     (? = 0 AND NOT EXISTS(SELECT 1 FROM summary_processes sp WHERE sp.meeting_id = m.id AND sp.result IS NOT NULL))
-               )",
+               )
+               AND (? IS NULL OR EXISTS(SELECT 1 FROM meeting_tags mt WHERE mt.meeting_id = m.id AND mt.tag_id = ?))",
         )
         .bind(&match_query)
         .bind(&filters.date_from)
@@ -197,6 +199,8 @@ impl TranscriptsRepository {
         .bind(filters.has_summary)
         .bind(filters.has_summary)
         .bind(filters.has_summary)
+        .bind(&filters.tag_id)
+        .bind(&filters.tag_id)
         .fetch_one(pool)
         .await?;
 
@@ -224,6 +228,7 @@ impl TranscriptsRepository {
                     (? = 1 AND EXISTS(SELECT 1 FROM summary_processes sp WHERE sp.meeting_id = m.id AND sp.result IS NOT NULL)) OR
                     (? = 0 AND NOT EXISTS(SELECT 1 FROM summary_processes sp WHERE sp.meeting_id = m.id AND sp.result IS NOT NULL))
                )
+               AND (? IS NULL OR EXISTS(SELECT 1 FROM meeting_tags mt WHERE mt.meeting_id = m.id AND mt.tag_id = ?))
              ORDER BY score DESC, t.timestamp DESC
              LIMIT ? OFFSET ?",
         )
@@ -237,6 +242,8 @@ impl TranscriptsRepository {
         .bind(filters.has_summary)
         .bind(filters.has_summary)
         .bind(filters.has_summary)
+        .bind(&filters.tag_id)
+        .bind(&filters.tag_id)
         .bind(limit)
         .bind(offset)
         .fetch_all(pool)
@@ -284,7 +291,8 @@ impl TranscriptsRepository {
                     ? IS NULL OR
                     (? = 1 AND EXISTS(SELECT 1 FROM summary_processes sp WHERE sp.meeting_id = m.id AND sp.result IS NOT NULL)) OR
                     (? = 0 AND NOT EXISTS(SELECT 1 FROM summary_processes sp WHERE sp.meeting_id = m.id AND sp.result IS NOT NULL))
-               )",
+               )
+               AND (? IS NULL OR EXISTS(SELECT 1 FROM meeting_tags mt WHERE mt.meeting_id = m.id AND mt.tag_id = ?))",
         )
         .bind(&filters.date_from)
         .bind(&filters.date_from)
@@ -295,6 +303,8 @@ impl TranscriptsRepository {
         .bind(filters.has_summary)
         .bind(filters.has_summary)
         .bind(filters.has_summary)
+        .bind(&filters.tag_id)
+        .bind(&filters.tag_id)
         .fetch_one(pool)
         .await?;
 
@@ -320,6 +330,7 @@ impl TranscriptsRepository {
                     (? = 1 AND EXISTS(SELECT 1 FROM summary_processes sp WHERE sp.meeting_id = m.id AND sp.result IS NOT NULL)) OR
                     (? = 0 AND NOT EXISTS(SELECT 1 FROM summary_processes sp WHERE sp.meeting_id = m.id AND sp.result IS NOT NULL))
                )
+               AND (? IS NULL OR EXISTS(SELECT 1 FROM meeting_tags mt WHERE mt.meeting_id = m.id AND mt.tag_id = ?))
              ORDER BY m.updated_at DESC, t.timestamp DESC
              LIMIT ? OFFSET ?",
         )
@@ -332,6 +343,8 @@ impl TranscriptsRepository {
         .bind(filters.has_summary)
         .bind(filters.has_summary)
         .bind(filters.has_summary)
+        .bind(&filters.tag_id)
+        .bind(&filters.tag_id)
         .bind(limit)
         .bind(offset)
         .fetch_all(pool)
@@ -448,6 +461,17 @@ mod tests {
         .execute(&pool)
         .await
         .expect("failed to create summary_processes table");
+
+        sqlx::query(
+            "CREATE TABLE meeting_tags (
+                meeting_id TEXT NOT NULL,
+                tag_id TEXT NOT NULL,
+                PRIMARY KEY (meeting_id, tag_id)
+            )",
+        )
+        .execute(&pool)
+        .await
+        .expect("failed to create meeting_tags table");
 
         sqlx::query(
             "CREATE VIRTUAL TABLE transcripts_fts USING fts5(

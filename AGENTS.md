@@ -4,7 +4,7 @@ This repository's product of record is the native Tauri desktop application in [
 
 ## Release Status
 
-**v0.4.0 Complete** — Structured meeting intelligence, speaker identities, review workflows, and manual voice-profile management on top of the v0.3.0 foundation (PDF/DOCX export, speaker diarization).
+**v0.5.0 In Progress** — Context ingestion layer, provider capability registry, embedding pipeline foundation, and engineering hardening on top of the v0.4.0 foundation (structured meeting intelligence, speaker identities, review workflows).
 
 ## Stack
 
@@ -63,6 +63,13 @@ See [docs/DATA_MODEL.md](docs/DATA_MODEL.md) for the database schema and content
 - **Review UI** for meeting speakers, action items, and decisions with accept/reject/needs-review states
 - **Structured export assembly** preferring canonical action-item and decision rows
 - **Decision-to-action-item relationship linking**
+- **Provider capability registry** with per-provider feature detection (tool use, JSON mode, streaming, context size, embeddings)
+- **Meeting context assets** (scratchpad, attachments, calendar events, notes) with full CRUD
+- **Tag system** for meeting organization with create, delete, tag/untag, and filtered search
+- **Context assembly service** producing a unified MeetingContextPackage for summary, export, and copilot
+- **Embedding storage and retrieval** with cosine similarity search (SQLite BLOB storage, application-layer similarity)
+- **Embedding provider abstraction** with Ollama and OpenAI-compatible implementations
+- **CI merge gate** now runs `cargo test`, `cargo fmt`, and `cargo clippy` (previously only `cargo check`)
 
 ### Platform-Specific Limitations
 - System audio capture availability depends on platform audio stack exposure:
@@ -75,7 +82,8 @@ See [docs/DATA_MODEL.md](docs/DATA_MODEL.md) for the database schema and content
 - Cloud sync (not in product vision)
 - Cross-meeting speaker identification via acoustic matching (planned for v0.5+)
 - Voice profile training and automatic speaker matching (planned for v0.5+)
-- Context ingestion: scratchpad, attachments, calendar enrichment (planned for v0.5)
+- Context-aware summary generation consuming scratchpad/tags/attachments (planned for v0.5 completion)
+- Calendar enrichment via OS calendar APIs (planned for v0.5.1 or v0.6)
 - Meeting memory and cross-meeting retrieval (planned for v0.6)
 - Live meeting copilot (planned for v0.7+)
 - Streaming summary generation (backend implemented, frontend wiring pending)

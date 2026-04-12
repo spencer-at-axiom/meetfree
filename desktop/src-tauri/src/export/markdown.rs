@@ -8,7 +8,6 @@ use tauri::{AppHandle, Manager, Runtime};
 use tokio::fs;
 
 use super::common::*;
-use crate::database::repositories::vocabulary::VocabularyRule;
 
 #[derive(Debug, Serialize)]
 pub struct MeetingMarkdownExportResult {
@@ -57,15 +56,7 @@ pub async fn export_meeting_markdown<R: Runtime>(
     preview_mode: bool,
 ) -> Result<MeetingMarkdownExportResult, String> {
     let context = collect_export_context(pool, meeting_id).await?;
-    let rendered_markdown = render_meeting_markdown(
-        &context.meeting,
-        &context.summary_markdown,
-        &context.transcript_rows,
-        &context.speaker_turns,
-        &context.action_items,
-        &context.decisions,
-        &context.vocabulary_rules,
-    );
+    let rendered_markdown = render_meeting_markdown(&context);
 
     if preview_mode {
         return Ok(MeetingMarkdownExportResult {
@@ -138,15 +129,7 @@ async fn export_single_batch_meeting(
 ) -> MeetingMarkdownBatchExportResult {
     let result = async {
         let context = collect_export_context(pool, meeting_id).await?;
-        let rendered_markdown = render_meeting_markdown(
-            &context.meeting,
-            &context.summary_markdown,
-            &context.transcript_rows,
-            &context.speaker_turns,
-            &context.action_items,
-            &context.decisions,
-            &context.vocabulary_rules,
-        );
+        let rendered_markdown = render_meeting_markdown(&context);
 
         if preview_mode {
             return Ok::<Option<PathBuf>, String>(None);
@@ -208,32 +191,29 @@ fn resolve_single_destination_dir<R: Runtime>(
     Ok(app_data.join("exports").join(&meeting.id))
 }
 
-pub fn render_meeting_markdown(
-    meeting: &MeetingExportData,
-    summary_markdown: &str,
-    transcript_rows: &[TranscriptExportRow],
-    speaker_turns: &[SpeakerTurnExportRow],
-    action_items: &[ActionItemExportRow],
-    decisions: &[DecisionExportRow],
-    vocabulary: &[VocabularyRule],
-) -> String {
+pub fn render_meeting_markdown(ctx: &ExportContext) -> String {
+    let meeting = &ctx.meeting;
     let (summary_section, fallback_action_items, fallback_decisions) =
-        split_summary_markdown_sections(summary_markdown);
-    let action_items_section = if action_items.is_empty() {
+        split_summary_markdown_sections(&ctx.summary_markdown);
+    let action_items_section = if ctx.action_items.is_empty() {
         fallback_action_items
     } else {
-        render_action_items_markdown(action_items)
+        render_action_items_markdown(&ctx.action_items)
     };
-    let decisions_section = if decisions.is_empty() {
+    let decisions_section = if ctx.decisions.is_empty() {
         fallback_decisions
     } else {
-        render_decisions_markdown(decisions)
+        render_decisions_markdown(&ctx.decisions)
     };
 
-    let transcript_lines = if transcript_rows.is_empty() {
+    let transcript_lines = if ctx.transcript_rows.is_empty() {
         vec!["_No transcript available._".to_string()]
     } else {
-        format_transcript_with_speakers(transcript_rows, speaker_turns, vocabulary)
+        format_transcript_with_speakers(
+            &ctx.transcript_rows,
+            &ctx.speaker_turns,
+            &ctx.vocabulary_rules,
+        )
     };
 
     let transcript_markdown = transcript_lines.join("\n");
@@ -269,15 +249,24 @@ pub fn render_meeting_markdown(
             .map(|seconds| format!("{:.3}", seconds))
             .unwrap_or_else(|| "null".to_string())
     ));
-    output.push_str(&format!("transcript_count: {}\n", transcript_rows.len()));
+    output.push_str(&format!(
+        "transcript_count: {}\n",
+        ctx.transcript_rows.len()
+    ));
 
-    // Add diarization info if available
     if let Some(status) = &meeting.diarization_status {
         output.push_str(&format!("diarization_status: {}\n", yaml_quote(status)));
-        if status == "completed" && !speaker_turns.is_empty() {
+        if status == "completed" && !ctx.speaker_turns.is_empty() {
             let unique_speakers: std::collections::HashSet<_> =
-                speaker_turns.iter().map(|t| t.speaker_number).collect();
+                ctx.speaker_turns.iter().map(|t| t.speaker_number).collect();
             output.push_str(&format!("speaker_count: {}\n", unique_speakers.len()));
+        }
+    }
+
+    if !ctx.tags.is_empty() {
+        output.push_str("tags:\n");
+        for tag in &ctx.tags {
+            output.push_str(&format!("  - {}\n", yaml_quote(tag)));
         }
     }
 
@@ -302,6 +291,13 @@ pub fn render_meeting_markdown(
         &decisions_section,
         "_No decisions captured._",
     ));
+
+    if let Some(ref scratchpad) = ctx.scratchpad {
+        output.push_str("\n\n## Meeting Notes\n\n");
+        output.push_str(scratchpad.trim());
+        output.push('\n');
+    }
+
     output.push_str("\n\n## Transcript\n\n");
     output.push_str(&transcript_markdown);
     output.push('\n');
@@ -311,6 +307,7 @@ pub fn render_meeting_markdown(
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::database::repositories::vocabulary::VocabularyRule;
 
     #[test]
     fn split_summary_sections_extracts_headings() {
@@ -327,6 +324,28 @@ Status update
         assert!(summary.contains("Status update"));
         assert_eq!(actions.trim(), "- Send notes");
         assert_eq!(decisions.trim(), "- Ship on Friday");
+    }
+
+    fn test_export_context(
+        meeting: MeetingExportData,
+        summary: &str,
+        transcript_rows: Vec<TranscriptExportRow>,
+        speaker_turns: Vec<SpeakerTurnExportRow>,
+        action_items: Vec<ActionItemExportRow>,
+        decisions: Vec<DecisionExportRow>,
+        vocabulary_rules: Vec<VocabularyRule>,
+    ) -> ExportContext {
+        ExportContext {
+            meeting,
+            summary_markdown: summary.to_string(),
+            transcript_rows,
+            speaker_turns,
+            action_items,
+            decisions,
+            vocabulary_rules,
+            scratchpad: None,
+            tags: vec![],
+        }
     }
 
     #[test]
@@ -351,23 +370,23 @@ Status update
             audio_end_time: 1000.0,
         }];
 
-        let speaker_turns = vec![];
-
         let rules = vec![VocabularyRule {
             source_text: "open ai".to_string(),
             target_text: "OpenAI".to_string(),
             case_sensitive: false,
         }];
 
-        let rendered = render_meeting_markdown(
-            &meeting,
+        let ctx = test_export_context(
+            meeting,
             "## Action Items\n- Follow up",
-            &transcript_rows,
-            &speaker_turns,
-            &[],
-            &[],
-            &rules,
+            transcript_rows,
+            vec![],
+            vec![],
+            vec![],
+            rules,
         );
+
+        let rendered = render_meeting_markdown(&ctx);
 
         assert!(rendered.contains("## Summary"));
         assert!(rendered.contains("## Action Items"));
@@ -392,29 +411,58 @@ Status update
             diarization_status: None,
         };
 
-        let rendered = render_meeting_markdown(
-            &meeting,
+        let ctx = test_export_context(
+            meeting,
             "## Action Items\n- Legacy fallback\n## Decisions\n- Legacy decision",
-            &[],
-            &[],
-            &[ActionItemExportRow {
+            vec![],
+            vec![],
+            vec![ActionItemExportRow {
                 title: "Structured follow up".to_string(),
                 owner_display_name: Some("Alex".to_string()),
                 due_date: Some("2026-01-05".to_string()),
                 status: "open".to_string(),
                 source_excerpt: None,
             }],
-            &[DecisionExportRow {
+            vec![DecisionExportRow {
                 title: "Use structured export".to_string(),
                 source_excerpt: None,
             }],
-            &[],
+            vec![],
         );
+
+        let rendered = render_meeting_markdown(&ctx);
 
         assert!(rendered.contains("Structured follow up"));
         assert!(rendered.contains("[owner:: Alex]"));
         assert!(rendered.contains("Use structured export"));
         assert!(!rendered.contains("Legacy fallback"));
         assert!(!rendered.contains("Legacy decision"));
+    }
+
+    #[test]
+    fn render_meeting_markdown_includes_tags_and_scratchpad() {
+        let meeting = MeetingExportData {
+            id: "meeting-3".to_string(),
+            title: "Tagged Meeting".to_string(),
+            created_at: "2026-01-03T00:00:00Z".to_string(),
+            updated_at: "2026-01-03T00:00:00Z".to_string(),
+            folder_path: None,
+            source_type: "recorded".to_string(),
+            language: None,
+            duration_seconds: None,
+            diarization_status: None,
+        };
+
+        let mut ctx = test_export_context(meeting, "", vec![], vec![], vec![], vec![], vec![]);
+        ctx.tags = vec!["sprint-planning".to_string(), "engineering".to_string()];
+        ctx.scratchpad = Some("Ask about Q3 budget".to_string());
+
+        let rendered = render_meeting_markdown(&ctx);
+
+        assert!(rendered.contains("tags:"));
+        assert!(rendered.contains("sprint-planning"));
+        assert!(rendered.contains("engineering"));
+        assert!(rendered.contains("## Meeting Notes"));
+        assert!(rendered.contains("Ask about Q3 budget"));
     }
 }

@@ -3,6 +3,7 @@
 import React, { createContext, useContext, useState, useEffect } from 'react';
 import Analytics from '@/lib/analytics';
 import { invoke } from '@tauri-apps/api/core';
+import { useSummaryPolling } from '@/hooks/useSummaryPolling';
 
 export interface Meeting {
   id: string;
@@ -15,8 +16,7 @@ export interface CurrentMeeting {
   title: string;
 }
 
-// Search result type for transcript search
-interface TranscriptSearchResult {
+export interface TranscriptSearchResult {
   id: string;
   title: string;
   matchContext: string;
@@ -31,6 +31,14 @@ export interface TranscriptSearchFilters {
   dateTo: string;
   sourceType: 'all' | 'recorded' | 'imported' | 'retranscribed';
   hasSummary: 'all' | 'yes' | 'no';
+  tagId?: string;
+}
+
+interface SummaryPollResult {
+  status: string;
+  meeting_id: string;
+  data?: unknown;
+  error?: string;
 }
 
 interface MeetingsContextType {
@@ -46,11 +54,9 @@ interface MeetingsContextType {
   isSearching: boolean;
   searchFilters: TranscriptSearchFilters;
   setSearchFilters: (filters: TranscriptSearchFilters) => void;
-  // Summary polling management
   activeSummaryPolls: Map<string, NodeJS.Timeout>;
-  startSummaryPolling: (meetingId: string, processId: string, onUpdate: (result: any) => void) => void;
+  startSummaryPolling: (meetingId: string, processId: string, onUpdate: (result: SummaryPollResult) => void) => void;
   stopSummaryPolling: (meetingId: string) => void;
-  // Refetch meetings from the native Tauri data layer
   refetchMeetings: () => Promise<void>;
 }
 
@@ -77,14 +83,18 @@ export function MeetingsProvider({ children }: { children: React.ReactNode }) {
     sourceType: 'all',
     hasSummary: 'all',
   });
-  const [activeSummaryPolls, setActiveSummaryPolls] = useState<Map<string, NodeJS.Timeout>>(new Map());
 
-  // Fetch meetings from backend
+  const {
+    activePolls: activeSummaryPolls,
+    startPolling: startSummaryPolling,
+    stopPolling: stopSummaryPolling,
+  } = useSummaryPolling();
+
   const fetchMeetings = React.useCallback(async () => {
     try {
       setIsLoading(true);
-      const meetings = await invoke('meetings_list') as Array<{ id: string; title: string; created_at?: string }>;
-      setMeetings(meetings);
+      const meetingList = await invoke('meetings_list') as Array<{ id: string; title: string; created_at?: string }>;
+      setMeetings(meetingList);
       Analytics.trackBackendConnection(true);
     } catch (error) {
       console.error('Error fetching meetings:', error);
@@ -99,13 +109,13 @@ export function MeetingsProvider({ children }: { children: React.ReactNode }) {
     fetchMeetings();
   }, [fetchMeetings]);
 
-  // Function to search through meeting transcripts
   const searchTranscripts = async (query: string, filters: TranscriptSearchFilters = searchFilters) => {
     const hasActiveFilters =
       !!filters.dateFrom ||
       !!filters.dateTo ||
       filters.sourceType !== 'all' ||
-      filters.hasSummary !== 'all';
+      filters.hasSummary !== 'all' ||
+      !!filters.tagId;
 
     if (!query.trim() && !hasActiveFilters) {
       setSearchResults([]);
@@ -128,6 +138,7 @@ export function MeetingsProvider({ children }: { children: React.ReactNode }) {
         dateTo: filters.dateTo || null,
         sourceType: filters.sourceType !== 'all' ? filters.sourceType : null,
         hasSummary,
+        tagId: filters.tagId || null,
         limit: 200,
         offset: 0,
       };
@@ -141,105 +152,6 @@ export function MeetingsProvider({ children }: { children: React.ReactNode }) {
       setIsSearching(false);
     }
   };
-
-  // Summary polling management
-  const startSummaryPolling = React.useCallback((
-    meetingId: string,
-    processId: string,
-    onUpdate: (result: any) => void
-  ) => {
-    // Stop existing poll for this meeting if any
-    if (activeSummaryPolls.has(meetingId)) {
-      clearInterval(activeSummaryPolls.get(meetingId)!);
-    }
-
-    console.log(`📊 Starting polling for meeting ${meetingId}, process ${processId}`);
-
-    let pollCount = 0;
-    const MAX_POLLS = 200; // ~16.5 minutes at 5-second intervals
-
-    const pollInterval = setInterval(async () => {
-      pollCount++;
-
-      if (pollCount >= MAX_POLLS) {
-        console.warn(`⏱️ Polling timeout for ${meetingId} after ${MAX_POLLS} iterations`);
-        clearInterval(pollInterval);
-        setActiveSummaryPolls(prev => {
-          const next = new Map(prev);
-          next.delete(meetingId);
-          return next;
-        });
-        onUpdate({
-          status: 'error',
-          error: 'Summary generation timed out after 15 minutes. Please try again or check your model configuration.'
-        });
-        return;
-      }
-
-      try {
-        const result = await invoke('api_get_summary', {
-          meetingId: meetingId,
-        }) as any;
-
-        console.log(`📊 Polling update for ${meetingId}:`, result.status);
-
-        onUpdate(result);
-
-        if (result.status === 'completed' || result.status === 'error' || result.status === 'failed' || result.status === 'cancelled') {
-          console.log(`Polling completed for ${meetingId}, status: ${result.status}`);
-          clearInterval(pollInterval);
-          setActiveSummaryPolls(prev => {
-            const next = new Map(prev);
-            next.delete(meetingId);
-            return next;
-          });
-        } else if (result.status === 'idle' && pollCount > 1) {
-          console.log(`Process completed or not found for ${meetingId}, stopping poll`);
-          clearInterval(pollInterval);
-          setActiveSummaryPolls(prev => {
-            const next = new Map(prev);
-            next.delete(meetingId);
-            return next;
-          });
-        }
-      } catch (error) {
-        console.error(`Polling error for ${meetingId}:`, error);
-        onUpdate({
-          status: 'error',
-          error: error instanceof Error ? error.message : 'Unknown error'
-        });
-        clearInterval(pollInterval);
-        setActiveSummaryPolls(prev => {
-          const next = new Map(prev);
-          next.delete(meetingId);
-          return next;
-        });
-      }
-    }, 5000);
-
-    setActiveSummaryPolls(prev => new Map(prev).set(meetingId, pollInterval));
-  }, [activeSummaryPolls]);
-
-  const stopSummaryPolling = React.useCallback((meetingId: string) => {
-    const pollInterval = activeSummaryPolls.get(meetingId);
-    if (pollInterval) {
-      console.log(`⏹️ Stopping polling for meeting ${meetingId}`);
-      clearInterval(pollInterval);
-      setActiveSummaryPolls(prev => {
-        const next = new Map(prev);
-        next.delete(meetingId);
-        return next;
-      });
-    }
-  }, [activeSummaryPolls]);
-
-  // Cleanup all polling intervals on unmount
-  useEffect(() => {
-    return () => {
-      console.log('🧹 Cleaning up all summary polling intervals');
-      activeSummaryPolls.forEach(interval => clearInterval(interval));
-    };
-  }, [activeSummaryPolls]);
 
   return (
     <MeetingsContext.Provider value={{

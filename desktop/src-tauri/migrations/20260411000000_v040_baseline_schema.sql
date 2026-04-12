@@ -1,6 +1,7 @@
--- v0.4.0 baseline schema (migration squash)
+-- v0.5.0 baseline schema (migration squash)
 -- This migration replaces historical incremental migrations with a single
 -- product-aligned schema for fresh development installs.
+-- Includes: v0.4 structured entities + v0.5 context layer, tags, embeddings.
 
 PRAGMA foreign_keys = ON;
 
@@ -208,6 +209,7 @@ CREATE TABLE IF NOT EXISTS decisions (
     source_excerpt TEXT,
     extraction_method TEXT NOT NULL,
     extraction_version TEXT NOT NULL,
+    related_action_item_ids TEXT,
     created_at TEXT NOT NULL,
     updated_at TEXT NOT NULL,
     FOREIGN KEY (meeting_id) REFERENCES meetings(id) ON DELETE CASCADE,
@@ -243,6 +245,78 @@ ON speaker_turns(meeting_id, speaker_number);
 
 CREATE INDEX IF NOT EXISTS idx_speaker_turns_timestamps
 ON speaker_turns(meeting_id, start_ms, end_ms);
+
+-- v0.5.0: Context ingestion layer
+
+CREATE TABLE IF NOT EXISTS meeting_context_assets (
+    id TEXT PRIMARY KEY NOT NULL,
+    meeting_id TEXT NOT NULL,
+    asset_type TEXT NOT NULL CHECK (
+        asset_type IN ('scratchpad', 'attachment', 'calendar_event', 'note')
+    ),
+    title TEXT,
+    content TEXT,
+    file_path TEXT,
+    file_mime_type TEXT,
+    file_size_bytes INTEGER,
+    metadata TEXT,
+    sort_order INTEGER NOT NULL DEFAULT 0,
+    created_at TEXT NOT NULL,
+    updated_at TEXT NOT NULL,
+    FOREIGN KEY (meeting_id) REFERENCES meetings(id) ON DELETE CASCADE
+);
+
+CREATE INDEX IF NOT EXISTS idx_context_assets_meeting
+ON meeting_context_assets(meeting_id);
+
+CREATE INDEX IF NOT EXISTS idx_context_assets_type
+ON meeting_context_assets(meeting_id, asset_type);
+
+-- v0.5.0: Tag system
+
+CREATE TABLE IF NOT EXISTS tags (
+    id TEXT PRIMARY KEY NOT NULL,
+    name TEXT NOT NULL,
+    normalized_name TEXT NOT NULL,
+    color TEXT,
+    created_at TEXT NOT NULL
+);
+
+CREATE UNIQUE INDEX IF NOT EXISTS idx_tags_normalized_name
+ON tags(normalized_name);
+
+CREATE TABLE IF NOT EXISTS meeting_tags (
+    meeting_id TEXT NOT NULL,
+    tag_id TEXT NOT NULL,
+    created_at TEXT NOT NULL,
+    PRIMARY KEY (meeting_id, tag_id),
+    FOREIGN KEY (meeting_id) REFERENCES meetings(id) ON DELETE CASCADE,
+    FOREIGN KEY (tag_id) REFERENCES tags(id) ON DELETE CASCADE
+);
+
+-- v0.5.0: Embedding storage for semantic retrieval
+
+CREATE TABLE IF NOT EXISTS embeddings (
+    id TEXT PRIMARY KEY NOT NULL,
+    source_type TEXT NOT NULL CHECK (
+        source_type IN ('transcript_segment', 'context_asset', 'meeting_summary')
+    ),
+    source_id TEXT NOT NULL,
+    meeting_id TEXT NOT NULL,
+    embedding BLOB NOT NULL,
+    model_name TEXT NOT NULL,
+    dimensions INTEGER NOT NULL,
+    created_at TEXT NOT NULL,
+    FOREIGN KEY (meeting_id) REFERENCES meetings(id) ON DELETE CASCADE
+);
+
+CREATE INDEX IF NOT EXISTS idx_embeddings_source
+ON embeddings(source_type, source_id);
+
+CREATE INDEX IF NOT EXISTS idx_embeddings_meeting
+ON embeddings(meeting_id);
+
+-- Full-text search
 
 CREATE VIRTUAL TABLE IF NOT EXISTS transcripts_fts
 USING fts5(

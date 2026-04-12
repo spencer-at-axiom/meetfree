@@ -185,3 +185,49 @@ pub struct DecisionModel {
     pub created_at: String,
     pub updated_at: String,
 }
+
+// v0.5.0: Context layer models
+
+#[derive(Debug, Clone, FromRow, Serialize, Deserialize)]
+pub struct MeetingContextAssetModel {
+    pub id: String,
+    pub meeting_id: String,
+    pub asset_type: String,
+    pub title: Option<String>,
+    pub content: Option<String>,
+    pub file_path: Option<String>,
+    pub file_mime_type: Option<String>,
+    pub file_size_bytes: Option<i64>,
+    pub metadata: Option<String>,
+    pub sort_order: i64,
+    pub created_at: String,
+    pub updated_at: String,
+}
+
+#[derive(Debug, Clone, FromRow, Serialize, Deserialize)]
+pub struct TagModel {
+    pub id: String,
+    pub name: String,
+    pub normalized_name: String,
+    pub color: Option<String>,
+    pub created_at: String,
+}
+
+#[derive(Debug, Clone, FromRow, Serialize, Deserialize)]
+pub struct MeetingTagModel {
+    pub meeting_id: String,
+    pub tag_id: String,
+    pub created_at: String,
+}
+
+#[derive(Debug, Clone, FromRow, Serialize, Deserialize)]
+pub struct EmbeddingModel {
+    pub id: String,
+    pub source_type: String,
+    pub source_id: String,
+    pub meeting_id: String,
+    pub embedding: Vec<u8>,
+    pub model_name: String,
+    pub dimensions: i64,
+    pub created_at: String,
+}

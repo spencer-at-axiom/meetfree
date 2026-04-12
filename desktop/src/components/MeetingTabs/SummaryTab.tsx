@@ -5,12 +5,21 @@ import { Button } from '@/components/ui/button';
 import type { ModelConfig, ModelSaveOptions } from '@/components/ModelSettingsModal';
 import type { SummaryPayload } from '@/contracts/summaryContract';
 import type { ExportFormat } from '@/types/export';
+import type { Transcript } from '@/types';
 import type { SumSt } from '@/hooks/meeting-details/sumMsg';
+import type { BlockNoteSummaryViewRef } from '@/components/AISummary/BlockNoteSummaryView';
+import type { RefObject } from 'react';
+
+interface TemplateOption {
+  id: string;
+  name: string;
+  description: string;
+}
 
 interface TabPrp {
   meetingId: string;
   isTitleDirty: boolean;
-  sumRef: any;
+  sumRef: RefObject<BlockNoteSummaryViewRef>;
   isSaving: boolean;
   onSaveAll: () => Promise<void>;
   onCopySummary: () => Promise<void>;
@@ -19,18 +28,18 @@ interface TabPrp {
   aiSum: SummaryPayload | null;
   sumSt: SumSt;
   streamProgress?: number;
-  rows: any[];
+  rows: Transcript[];
   cfg: ModelConfig;
   setCfg: (config: ModelConfig | ((prev: ModelConfig) => ModelConfig)) => void;
   onSaveCfg: (config?: ModelConfig, options?: ModelSaveOptions) => Promise<void>;
   onGen: (prompt: string) => Promise<void>;
   onHalt: () => void;
   prompt: string;
-  onSaveSum: (content: any) => Promise<void>;
+  onSaveSum: (content: SummaryPayload) => Promise<void>;
   onDirtyChange: (isDirty: boolean) => void;
   sumErr: string | null;
   getMsg: (status: SumSt) => string;
-  tpls: any[];
+  tpls: TemplateOption[];
   selTpl: string;
   onTpl: (templateId: string, templateName: string) => void;
   isCfg: boolean;

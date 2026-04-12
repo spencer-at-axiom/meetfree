@@ -246,7 +246,7 @@ pub async fn api_process_transcript<R: Runtime>(
     );
 
     let pool = state.db_manager.pool().clone();
-    let final_prompt = custom_prompt.unwrap_or_default();
+    let user_prompt = custom_prompt.unwrap_or_default();
     let final_template_id = template_id.unwrap_or_else(|| "daily_standup".to_string());
     let summary_input_text = match crate::vocabulary::apply_to_meeting_text(
         &pool,
@@ -263,6 +263,30 @@ pub async fn api_process_transcript<R: Runtime>(
                 error
             );
             text.clone()
+        }
+    };
+
+    // Assemble meeting context (scratchpad, tags, attachments) and merge into prompt
+    let final_prompt = match crate::context::assemble_meeting_context(&pool, &m_id).await {
+        Ok(ctx) => {
+            let context_block = crate::context::format_context_for_prompt(&ctx);
+            if context_block.is_empty() {
+                user_prompt
+            } else {
+                if user_prompt.is_empty() {
+                    context_block
+                } else {
+                    format!("{}\n\n{}", context_block, user_prompt)
+                }
+            }
+        }
+        Err(error) => {
+            log_warn!(
+                "Failed to load meeting context for summary (meeting_id={}): {}. Proceeding without context.",
+                &m_id,
+                error
+            );
+            user_prompt
         }
     };
 

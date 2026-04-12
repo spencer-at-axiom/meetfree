@@ -51,6 +51,8 @@ pub struct TranscriptSearchRequest {
     pub source_type: Option<String>,
     #[serde(rename = "hasSummary")]
     pub has_summary: Option<bool>,
+    #[serde(rename = "tagId")]
+    pub tag_id: Option<String>,
     pub limit: Option<i64>,
     pub offset: Option<i64>,
 }
@@ -257,6 +259,7 @@ pub async fn api_search_transcripts_with_filters<R: Runtime>(
         date_to: request.date_to,
         source_type: request.source_type,
         has_summary: request.has_summary,
+        tag_id: request.tag_id,
         limit: request.limit.unwrap_or(50),
         offset: request.offset.unwrap_or(0),
     };

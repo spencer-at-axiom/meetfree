@@ -110,11 +110,17 @@
 //!
 //! # Version
 //!
-//! Current version: 0.3.0
-//! - PDF/DOCX export
-//! - Speaker diarization
-//! - Batch export
-//! - Export path tracking
+//! Current version: 0.5.0
+//! - Context ingestion layer (scratchpad, attachments, tags)
+//! - Provider capability registry
+//! - Embedding pipeline foundation
+//! - Structured extraction via provider-native features
+//!
+//! Previous versions:
+//! - 0.4.0: Structured meeting intelligence, speaker identities, review workflows
+//! - 0.3.0: PDF/DOCX export, speaker diarization, batch export
+//! - 0.2.0: FTS5 search, vocabulary rules
+//! - 0.1.0: Core recording, transcription, and summary features
 
 use serde::Serialize;
 use std::sync::{Arc, Mutex as StdMutex};
@@ -157,10 +163,12 @@ pub mod audio;
 pub mod bootstrap;
 pub mod brand;
 pub mod config;
+pub mod context;
 pub mod console_utils;
 pub mod database;
 pub mod diarization;
 pub mod export;
+pub mod embeddings;
 pub mod groq;
 pub mod markdown_export;
 pub mod notifications;

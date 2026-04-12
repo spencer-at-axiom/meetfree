@@ -71,7 +71,23 @@ pub fn build_docx_document(context: &ExportContext) -> Result<Vec<u8>, String> {
         docx = docx.add_paragraph(Paragraph::new().add_run(Run::new().add_text(text)));
     }
 
+    if !context.tags.is_empty() {
+        docx = docx.add_paragraph(
+            Paragraph::new().add_run(Run::new().add_text(format!("Tags: {}", context.tags.join(", ")))),
+        );
+    }
+
     docx = docx.add_paragraph(Paragraph::new());
+
+    if let Some(ref scratchpad) = context.scratchpad {
+        docx = docx.add_paragraph(
+            Paragraph::new().add_run(Run::new().add_text("Meeting Notes").size(24).bold()),
+        );
+        for line in scratchpad.lines() {
+            docx = docx.add_paragraph(Paragraph::new().add_run(Run::new().add_text(line)));
+        }
+        docx = docx.add_paragraph(Paragraph::new());
+    }
 
     // Summary section
     if !context.summary_markdown.is_empty() {

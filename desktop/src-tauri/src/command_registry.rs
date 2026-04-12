@@ -149,6 +149,19 @@ macro_rules! app_invoke_handler {
             database::commands::action_item_review_update,
             database::commands::action_item_status_update,
             database::commands::decision_review_update,
+            database::context_commands::context_asset_create,
+            database::context_commands::context_asset_list,
+            database::context_commands::context_asset_update,
+            database::context_commands::context_asset_delete,
+            database::context_commands::scratchpad_get,
+            database::context_commands::scratchpad_upsert,
+            database::context_commands::tag_create,
+            database::context_commands::tag_list,
+            database::context_commands::tag_delete,
+            database::context_commands::meeting_tag_add,
+            database::context_commands::meeting_tag_remove,
+            database::context_commands::meeting_tags_list,
+            database::context_commands::meeting_context_get,
             onboarding::get_onboarding_status,
             onboarding::save_onboarding_status_cmd,
             onboarding::reset_onboarding_status_cmd,
@@ -166,6 +179,8 @@ macro_rules! app_invoke_handler {
             database::backup::create_database_backup,
             database::backup::list_database_backups,
             database::backup::cleanup_old_backups,
+            embeddings::commands::embedding_status,
+            embeddings::commands::embedding_search,
             // Platform-specific commands
             #[cfg(target_os = "macos")]
             utils::open_system_settings

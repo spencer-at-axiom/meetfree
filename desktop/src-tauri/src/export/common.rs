@@ -14,6 +14,8 @@ pub struct ExportContext {
     pub decisions: Vec<DecisionExportRow>,
     pub summary_markdown: String,
     pub vocabulary_rules: Vec<VocabularyRule>,
+    pub scratchpad: Option<String>,
+    pub tags: Vec<String>,
 }
 
 #[derive(Debug, Clone)]
@@ -80,6 +82,21 @@ pub async fn collect_export_context(
     let vocabulary_rules =
         crate::vocabulary::get_effective_rules_for_meeting(pool, Some(meeting_id)).await?;
 
+    let scratchpad =
+        crate::database::repositories::context_asset::ContextAssetsRepository::get_scratchpad(
+            pool, meeting_id,
+        )
+        .await
+        .map_err(|e| format!("Failed to load scratchpad: {}", e))?
+        .and_then(|a| a.content)
+        .filter(|s| !s.trim().is_empty());
+
+    let tag_models =
+        crate::database::repositories::tag::TagsRepository::list_meeting_tags(pool, meeting_id)
+            .await
+            .map_err(|e| format!("Failed to load tags: {}", e))?;
+    let tags: Vec<String> = tag_models.into_iter().map(|t| t.name).collect();
+
     Ok(ExportContext {
         meeting,
         transcript_rows,
@@ -88,6 +105,8 @@ pub async fn collect_export_context(
         decisions,
         summary_markdown,
         vocabulary_rules,
+        scratchpad,
+        tags,
     })
 }
 

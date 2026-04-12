@@ -25,7 +25,7 @@ pub struct VocabularyUpsertInput {
     pub case_sensitive: Option<bool>,
 }
 
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct VocabularyRule {
     pub source_text: String,
     pub target_text: String,

@@ -1,11 +1,10 @@
 'use client';
 
-import React, { createContext, useContext, useState, useEffect, useCallback, useMemo, ReactNode, useRef } from 'react';
+import React, { createContext, useContext, useState, useEffect, useCallback, useMemo, ReactNode } from 'react';
 import type { TranscriptModelProps } from '@/types/config';
 import { SelectedDevices } from '@/components/DeviceSelection';
 import { configService, ModelConfig } from '@/services/configService';
 import { invoke } from '@tauri-apps/api/core';
-import { buildSetAppPreferencesPayload } from '@/lib/tauriContracts';
 import {
   DEFAULT_PARAKEET_MODEL,
   DEFAULT_SUMMARY_PROVIDER,
@@ -18,50 +17,21 @@ import {
   writeBooleanPreference,
   writeStringPreference,
 } from '@/contexts/config/storage';
+import {
+  usePreferences,
+  type NotificationSettings,
+  type StorageLocations,
+  type AppPreferences,
+  type TranscriptCleanupPreferences,
+} from '@/hooks/usePreferences';
+
+export type { NotificationSettings, StorageLocations, AppPreferences, TranscriptCleanupPreferences };
 
 export interface OllamaModel {
   name: string;
   id: string;
   size: string;
   modified: string;
-}
-
-export interface StorageLocations {
-  database: string;
-  models: string;
-  recordings: string;
-}
-
-export interface NotificationSettings {
-  recording_notifications: boolean;
-  time_based_reminders: boolean;
-  meeting_reminders: boolean;
-  respect_do_not_disturb: boolean;
-  notification_sound: boolean;
-  system_permission_granted: boolean;
-  consent_given: boolean;
-  manual_dnd_mode: boolean;
-  notification_preferences: {
-    show_recording_started: boolean;
-    show_recording_stopped: boolean;
-    show_recording_paused: boolean;
-    show_recording_resumed: boolean;
-    show_transcription_complete: boolean;
-    show_meeting_reminders: boolean;
-    show_system_errors: boolean;
-    meeting_reminder_minutes: number[];
-  };
-}
-
-export interface TranscriptCleanupPreferences {
-  enabled: boolean;
-  remove_fillers: boolean;
-}
-
-export interface AppPreferences {
-  auto_export_markdown_on_finalize: boolean;
-  transcript_cleanup: TranscriptCleanupPreferences;
-  transcription_timeout_seconds: number;
 }
 
 interface ConfigContextType {
@@ -208,27 +178,16 @@ export function ConfigProvider({ children }: { children: ReactNode }) {
     return readBooleanPreference('isAutoSummary', false);
   });
 
-  // Preference settings state (lazy loaded)
-  const [notificationSettings, setNotificationSettings] = useState<NotificationSettings | null>(null);
-  const [storageLocations, setStorageLocations] = useState<StorageLocations | null>(null);
-  const [appPreferences, setAppPreferences] = useState<AppPreferences | null>(null);
-  const [isLoadingPreferences, setIsLoadingPreferences] = useState(false);
-  const preferencesLoadedRef = useRef(false);
-  const isLoadingRef = useRef(false);
-
-  // Load app-level preferences at startup so transcript display behavior is consistent
-  useEffect(() => {
-    const loadAppPreferences = async () => {
-      try {
-        const preferences = await invoke<AppPreferences>('get_app_preferences');
-        setAppPreferences(preferences);
-      } catch (error) {
-        console.error('[ConfigContext] Failed to load app preferences at startup:', error);
-      }
-    };
-
-    loadAppPreferences();
-  }, []);
+  // Preferences (notifications, storage, app prefs) — delegated to extracted hook
+  const {
+    notificationSettings,
+    storageLocations,
+    appPreferences,
+    isLoadingPreferences,
+    loadPreferences,
+    updateNotificationSettings,
+    updateAppPreferences,
+  } = usePreferences();
 
   // Load Ollama models (uses saved endpoint, re-runs when endpoint changes after config load)
   useEffect(() => {
@@ -411,94 +370,6 @@ export function ConfigProvider({ children }: { children: ReactNode }) {
   const toggleIsAutoSummary = useCallback((checked: boolean) => {
     setisAutoSummary(checked);
     writeBooleanPreference('isAutoSummary', checked);
-  }, [])
-
-  // Lazy load preference settings (only loads if not already cached)
-  const loadPreferences = useCallback(async () => {
-    // If already loaded, don't reload
-    if (preferencesLoadedRef.current) {
-      return;
-    }
-
-    // If currently loading, don't start another load
-    if (isLoadingRef.current) {
-      return;
-    }
-
-    isLoadingRef.current = true;
-    setIsLoadingPreferences(true);
-    try {
-      // Load notification settings from backend
-      let settings: NotificationSettings | null = null;
-      try {
-        settings = await invoke<NotificationSettings>('get_notification_settings');
-        setNotificationSettings(settings);
-      } catch (notifError) {
-        console.error('[ConfigContext] Failed to load notification settings:', notifError);
-        // Use default values if notification settings fail to load
-        setNotificationSettings(null);
-      }
-
-      // Load storage locations
-      const [dbDir, modelsDir, recordingsDir] = await Promise.all([
-        invoke<string>('get_database_directory'),
-        invoke<string>('whisper_get_models_directory'),
-        invoke<string>('get_default_recordings_folder_path')
-      ]);
-
-      setStorageLocations({
-        database: dbDir,
-        models: modelsDir,
-        recordings: recordingsDir
-      });
-
-      try {
-        const preferences = await invoke<AppPreferences>('get_app_preferences');
-        setAppPreferences(preferences);
-      } catch (preferencesError) {
-        console.error('[ConfigContext] Failed to load app preferences:', preferencesError);
-        setAppPreferences({
-          auto_export_markdown_on_finalize: false,
-          transcript_cleanup: {
-            enabled: true,
-            remove_fillers: true,
-          },
-          transcription_timeout_seconds: 600,
-        });
-      }
-
-      // Mark as loaded
-      preferencesLoadedRef.current = true;
-    } catch (error) {
-      console.error('[ConfigContext] Failed to load preferences:', error);
-    } finally {
-      isLoadingRef.current = false;
-      setIsLoadingPreferences(false);
-    }
-  }, []);
-
-  // Update notification settings
-  const updateNotificationSettings = useCallback(async (settings: NotificationSettings) => {
-    try {
-      await invoke('set_notification_settings', { settings });
-      setNotificationSettings(settings);
-    } catch (error) {
-      console.error('[ConfigContext] Failed to update notification settings:', error);
-      throw error; // Re-throw so component can handle error
-    }
-  }, []);
-
-  const updateAppPreferences = useCallback(async (preferences: AppPreferences) => {
-    try {
-      const saved = await invoke<AppPreferences>(
-        'set_app_preferences',
-        buildSetAppPreferencesPayload(preferences)
-      );
-      setAppPreferences(saved);
-    } catch (error) {
-      console.error('[ConfigContext] Failed to update app preferences:', error);
-      throw error;
-    }
   }, []);
 
   // Wrapper for setSelectedLanguage that persists to localStorage and syncs to Rust

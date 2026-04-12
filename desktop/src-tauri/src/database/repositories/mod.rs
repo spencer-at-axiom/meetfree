@@ -1,8 +1,11 @@
 pub mod action_item;
+pub mod context_asset;
 pub mod decision;
+pub mod embedding;
 pub mod meeting;
 pub mod setting;
 pub mod speaker_identity;
 pub mod summary;
+pub mod tag;
 pub mod transcript;
 pub mod vocabulary;

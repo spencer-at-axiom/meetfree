@@ -51,6 +51,7 @@ pub mod extraction_heuristics;
 pub mod llm_client;
 pub mod owner_linking;
 pub mod processor;
+pub mod provider_capabilities;
 pub mod provenance;
 pub mod service;
 pub mod streaming;
