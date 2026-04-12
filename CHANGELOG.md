@@ -7,7 +7,31 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
-No unreleased changes.
+### Added
+- v0.5 baseline schema content for `meeting_context_assets`, `tags`, `meeting_tags`, and `embeddings`
+- Tauri commands and repository modules for context assets, scratchpad upsert, tags, and assembled meeting context retrieval
+- `MeetingContextPackage` assembly for summary, export, and future copilot use
+- Frontend `contextService` plus hooks for context assets, scratchpad, tags, preferences, and extracted summary polling
+- Provider-capability registry groundwork in Rust with per-provider defaults and unit tests
+- Embedding storage repository plus Ollama and OpenAI-compatible embedding provider abstractions
+- Capability-query Tauri commands plus background embedding reindexing and semantic search responses
+- Meeting details context tab, meetings tag filter, and settings tag-management UI
+- Native context-attachment picker flow with text-preview ingestion for common text formats
+- `docs/V050_IMPLEMENTATION_PLAN.md` for the current release plan and forward roadmap
+
+### Changed
+- App manifests are now versioned `0.5.0`
+- Summary generation now merges scratchpad, tags, and text attachment content into the prompt when present
+- Markdown, PDF, and DOCX export now include scratchpad and tag metadata when present
+- Transcript search filters now support backend tag filtering through `tagId`
+- `ConfigContext` and `MeetingsContext` delegate part of their previous responsibilities into extracted hooks
+- The merge gate now runs frontend build/lint/test plus Rust `fmt`, `clippy`, `check`, and `test`
+- The squashed baseline migration file remains named `20260411000000_v040_baseline_schema.sql`, but its contents now represent the active `v0.5.0` baseline schema
+
+### Known Limitations
+- Provider capability queries now exist, but adaptive structured extraction and capability badges are not implemented yet
+- Semantic retrieval now works through the Tauri command layer for supported providers, but there is no dedicated semantic-search UI yet
+- Context-item management now supports picker-backed text attachment drafts, but richer binary attachment ingestion remains future work
 
 ## [0.4.0] - 2026-04-11
 

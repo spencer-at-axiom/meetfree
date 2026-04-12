@@ -163,12 +163,12 @@ pub mod audio;
 pub mod bootstrap;
 pub mod brand;
 pub mod config;
-pub mod context;
 pub mod console_utils;
+pub mod context;
 pub mod database;
 pub mod diarization;
-pub mod export;
 pub mod embeddings;
+pub mod export;
 pub mod groq;
 pub mod markdown_export;
 pub mod notifications;
@@ -210,64 +210,6 @@ struct TranscriptionStatus {
 }
 
 #[tauri::command]
-async fn start_recording<R: Runtime>(
-    app: AppHandle<R>,
-    mic_device_name: Option<String>,
-    system_device_name: Option<String>,
-    meeting_name: Option<String>,
-) -> Result<(), String> {
-    log_info!("start_recording called with meeting: {:?}", meeting_name);
-    log_info!(
-        "Backend received parameters - mic: {:?}, system: {:?}, meeting: {:?}",
-        mic_device_name,
-        system_device_name,
-        meeting_name
-    );
-
-    if is_recording().await {
-        return Err("Recording already in progress".to_string());
-    }
-
-    // Call the actual audio recording system with meeting name
-    match audio::recording_commands::start_recording_with_devices_and_meeting(
-        app.clone(),
-        mic_device_name,
-        system_device_name,
-        meeting_name.clone(),
-    )
-    .await
-    {
-        Ok(_) => {
-            // RECORDING_FLAG removed - state managed in RecordingRuntimeState
-            tray::update_tray_menu(&app);
-
-            log_info!("Recording started successfully");
-
-            // Show recording started notification through NotificationManager
-            // This respects user's notification preferences
-            let notification_manager_state = app.state::<NotificationManagerState<R>>();
-            if let Err(e) = notifications::commands::show_recording_started_notification(
-                &app,
-                &notification_manager_state,
-                meeting_name.clone(),
-            )
-            .await
-            {
-                log_error!("Failed to show recording started notification: {}", e);
-            } else {
-                log_info!("Successfully showed recording started notification");
-            }
-
-            Ok(())
-        }
-        Err(e) => {
-            log_error!("Failed to start audio recording: {}", e);
-            Err(format!("Failed to start recording: {}", e))
-        }
-    }
-}
-
-#[tauri::command]
 async fn stop_and_finalize_recording<R: Runtime>(
     app: AppHandle<R>,
 ) -> Result<audio::recording_commands::MeetingFinalizationResult, String> {
@@ -301,12 +243,6 @@ async fn stop_and_finalize_recording<R: Runtime>(
             Err(format!("Failed to stop recording: {}", e))
         }
     }
-}
-
-#[tauri::command]
-async fn stop_recording<R: Runtime>(app: AppHandle<R>) -> Result<(), String> {
-    // Deprecated compatibility wrapper. Prefer `stop_and_finalize_recording`.
-    stop_and_finalize_recording(app).await.map(|_| ())
 }
 
 #[tauri::command]
@@ -411,15 +347,6 @@ async fn get_audio_devices() -> Result<Vec<AudioDevice>, String> {
 async fn trigger_microphone_permission() -> Result<bool, String> {
     trigger_audio_permission()
         .map_err(|e| format!("Failed to trigger microphone permission: {}", e))
-}
-
-#[tauri::command]
-async fn start_recording_with_devices<R: Runtime>(
-    app: AppHandle<R>,
-    mic_device_name: Option<String>,
-    system_device_name: Option<String>,
-) -> Result<(), String> {
-    start_recording_with_devices_and_meeting(app, mic_device_name, system_device_name, None).await
 }
 
 #[tauri::command]

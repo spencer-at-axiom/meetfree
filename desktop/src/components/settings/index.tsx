@@ -13,6 +13,7 @@ import {
   TranscriptSettings as ModelSelectionSettings,
 } from '@/components/TranscriptSettings';
 import { Button } from '@/components/ui/button';
+import { useTags } from '@/hooks/useTags';
 import { Switch } from '@/components/ui/switch';
 import {
   type AppPreferences,
@@ -944,6 +945,105 @@ export function NotificationsSettings() {
         </SettingsCard>
       </SettingsSection>
 
+    </div>
+  );
+}
+
+export function TagsSettings() {
+  const { tags, createTag, deleteTag, isLoading } = useTags();
+  const [newTagName, setNewTagName] = useState('');
+  const [isCreating, setIsCreating] = useState(false);
+  const [deletingTagId, setDeletingTagId] = useState<string | null>(null);
+
+  const handleCreateTag = async () => {
+    const name = newTagName.trim();
+    if (!name) {
+      return;
+    }
+
+    setIsCreating(true);
+    try {
+      await createTag(name);
+      setNewTagName('');
+      toast.success('Tag created');
+    } catch (error) {
+      console.error('Failed to create tag:', error);
+      toast.error('Failed to create tag');
+    } finally {
+      setIsCreating(false);
+    }
+  };
+
+  const handleDeleteTag = async (tagId: string) => {
+    setDeletingTagId(tagId);
+    try {
+      await deleteTag(tagId);
+      toast.success('Tag deleted');
+    } catch (error) {
+      console.error('Failed to delete tag:', error);
+      toast.error('Failed to delete tag');
+    } finally {
+      setDeletingTagId(null);
+    }
+  };
+
+  return (
+    <div className="space-y-6">
+      <SettingsSection title="Tags">
+        <SettingsCard>
+          <SettingsGroup
+            label="Create tag"
+            description="Global tags can be attached to any meeting from the Context tab or meetings filters."
+          >
+            <div className="flex flex-col gap-3 sm:flex-row">
+              <input
+                type="text"
+                value={newTagName}
+                onChange={(event) => setNewTagName(event.target.value)}
+                placeholder="New tag name"
+                className={cn(SETTINGS_TEXT_INPUT_CLASS, 'w-full')}
+              />
+              <Button
+                type="button"
+                onClick={() => void handleCreateTag()}
+                disabled={isCreating || !newTagName.trim()}
+                className={SETTINGS_SOLID_BUTTON_CLASS}
+              >
+                {isCreating ? 'Creating...' : 'Create tag'}
+              </Button>
+            </div>
+          </SettingsGroup>
+
+          <SettingsDivider />
+
+          <SettingsGroup
+            label="Existing tags"
+            description="Deleting a tag removes it from all meetings and triggers context reindexing."
+          >
+            {isLoading ? (
+              <div className="text-sm text-slate-500">Loading tags...</div>
+            ) : tags.length === 0 ? (
+              <div className="text-sm text-slate-500">No tags created yet.</div>
+            ) : (
+              <div className="flex flex-wrap gap-2">
+                {tags.map((tag) => (
+                  <button
+                    key={tag.id}
+                    type="button"
+                    onClick={() => void handleDeleteTag(tag.id)}
+                    className="inline-flex items-center gap-2 rounded-full border border-slate-200 bg-slate-50 px-3 py-1.5 text-xs font-medium text-slate-700 transition hover:bg-slate-100"
+                  >
+                    <span>{tag.name}</span>
+                    <span className="text-slate-400">
+                      {deletingTagId === tag.id ? '...' : 'Delete'}
+                    </span>
+                  </button>
+                ))}
+              </div>
+            )}
+          </SettingsGroup>
+        </SettingsCard>
+      </SettingsSection>
     </div>
   );
 }

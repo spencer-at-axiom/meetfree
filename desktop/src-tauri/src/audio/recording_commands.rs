@@ -292,24 +292,18 @@ pub async fn start_recording_with_meeting_name<R: Runtime>(
         .await
         .unwrap_or_default();
 
-    let microphone_device = match prefs.preferred_mic_device.as_ref() {
-        Some(name) => Some(Arc::new(AudioDevice::new(
-            name.clone(),
-            super::DeviceType::Input,
-        ))),
-        None => None,
-    }
-    .or_else(|| default_input_device().ok().map(Arc::new))
-    .ok_or_else(|| "No microphone device available".to_string())?;
+    let microphone_device = prefs
+        .preferred_mic_device
+        .as_ref()
+        .map(|name| Arc::new(AudioDevice::new(name.clone(), super::DeviceType::Input)))
+        .or_else(|| default_input_device().ok().map(Arc::new))
+        .ok_or_else(|| "No microphone device available".to_string())?;
 
-    let system_device = match prefs.preferred_system_device.as_ref() {
-        Some(name) => Some(Arc::new(AudioDevice::new(
-            name.clone(),
-            super::DeviceType::Output,
-        ))),
-        None => None,
-    }
-    .or_else(|| default_output_device().ok().map(Arc::new));
+    let system_device = prefs
+        .preferred_system_device
+        .as_ref()
+        .map(|name| Arc::new(AudioDevice::new(name.clone(), super::DeviceType::Output)))
+        .or_else(|| default_output_device().ok().map(Arc::new));
 
     create_session(
         &app,
@@ -376,21 +370,13 @@ pub async fn start_recording_with_devices_and_meeting<R: Runtime>(
         .map(|prefs| prefs.auto_save)
         .unwrap_or(true);
 
-    let microphone_device = match mic_device_name.as_ref() {
-        Some(name) => Some(Arc::new(AudioDevice::new(
-            name.clone(),
-            super::DeviceType::Input,
-        ))),
-        None => None,
-    };
+    let microphone_device = mic_device_name
+        .as_ref()
+        .map(|name| Arc::new(AudioDevice::new(name.clone(), super::DeviceType::Input)));
 
-    let system_device = match system_device_name.as_ref() {
-        Some(name) => Some(Arc::new(AudioDevice::new(
-            name.clone(),
-            super::DeviceType::Output,
-        ))),
-        None => None,
-    };
+    let system_device = system_device_name
+        .as_ref()
+        .map(|name| Arc::new(AudioDevice::new(name.clone(), super::DeviceType::Output)));
 
     create_session(
         &app,
@@ -632,6 +618,11 @@ pub async fn stop_and_finalize_recording<R: Runtime>(
     }
 
     if !finalization_result.meeting_id.is_empty() && finalization_result.save_error.is_none() {
+        crate::embeddings::spawn_meeting_embedding_reindex(
+            app.clone(),
+            finalization_result.meeting_id.clone(),
+        );
+
         let preferences = crate::preferences::load_app_preferences(&app)
             .await
             .unwrap_or_default();

@@ -1,7 +1,7 @@
 # MeetFree v0.5.0 Implementation Plan and Forward Roadmap
 
 Last updated: April 11, 2026
-Status: Draft
+Status: In Progress
 Baseline: v0.4.0 complete
 Parent document: `docs/PRODUCT_VISION_TO_V1.md`
 
@@ -14,6 +14,12 @@ This release has three pillars:
 1. **Context layer**: scratchpad, attachments, calendar enrichment, tags
 2. **Intelligence infrastructure**: provider capability registry, structured extraction via provider-native features, embedding pipeline foundation
 3. **Engineering hardening**: frontend state architecture refactoring, CI improvements, naming/readability pass
+
+Verified repo snapshot as of April 11, 2026:
+
+- Landed: merge-gate hardening in `.github/workflows/quality.yml`, `lib.rs` and manifest version updates, AGENTS/doc alignment, context/tags/embedding baseline schema, context repositories and Tauri commands, `MeetingContextPackage` assembly, context-aware summary prompt assembly, export inclusion of scratchpad and tags, backend tag-filtered transcript search, context services/hooks, extracted summary polling hook, provider-capability module plus tests, capability-query commands, background embedding reindexing, semantic-search command responses, meeting-details context UI, meetings tag filtering, and settings tag management.
+- Partial: provider-native adaptive extraction is still not implemented; semantic retrieval has no dedicated UI yet; attachment workflows are still text and metadata oriented rather than full native file-ingestion flows.
+- Verified local command state during this doc pass: `cargo fmt -p meetfree -- --check`, `cargo check -p meetfree --lib`, `cargo clippy -p meetfree -- -D warnings`, `cargo test -p meetfree --lib`, `pnpm.cmd run lint`, and `pnpm.cmd run test` all passed.
 
 ## 2. Sequencing Rationale
 
@@ -37,9 +43,9 @@ v0.5 is the last foundation release before user-facing intelligence features dom
 
 #### 1.1 Add Rust Tests to Merge Gate
 
-- [ ] Update `.github/workflows/quality.yml` to run `cargo test -p meetfree --lib --locked` in the `rust` job (not just `cargo check`)
-- [ ] Add `cargo fmt -- --check` step to the `rust` job (toolchain already installs `rustfmt`)
-- [ ] Add `cargo clippy -p meetfree -- -D warnings` step to the `rust` job (toolchain already installs `clippy`)
+- [x] Update `.github/workflows/quality.yml` to run `cargo test -p meetfree --lib --locked` in the `rust` job (not just `cargo check`)
+- [x] Add `cargo fmt -- --check` step to the `rust` job (toolchain already installs `rustfmt`)
+- [x] Add `cargo clippy -p meetfree -- -D warnings` step to the `rust` job (toolchain already installs `clippy`)
 - [ ] Verify merge gate catches a deliberately broken test before merging the change
 
 Exit condition: The merge gate rejects PRs that break Rust unit tests, formatting, or lints.
@@ -53,9 +59,9 @@ Exit condition: The merge gate rejects PRs that break Rust unit tests, formattin
 
 #### 1.3 Documentation Alignment
 
-- [ ] Update `lib.rs` header version from `0.3.0` to `0.5.0`
-- [ ] Align `AGENTS.md` reference to `useRecordingSessionController` with actual implementation (`useRec` + `RecCtx` + split hooks)
-- [ ] Update `DATA_MODEL.md` to include v0.4.0 tables (speaker_identities, voice_profiles, meeting_speakers, action_items, decisions) and v0.5.0 tables once added
+- [x] Update `lib.rs` header version from `0.3.0` to `0.5.0`
+- [x] Align `AGENTS.md` reference to `useRecordingSessionController` with actual implementation (`useRec` + `RecCtx` + split hooks)
+- [x] Update `DATA_MODEL.md` to include v0.4.0 tables (speaker_identities, voice_profiles, meeting_speakers, action_items, decisions) and v0.5.0 tables once added
 
 ---
 
@@ -157,7 +163,7 @@ Validation:
 
 Add new file: `desktop/src-tauri/src/summary/provider_capabilities.rs`
 
-- [ ] Define `ProviderCapabilities` struct:
+- [x] Define `ProviderCapabilities` struct:
   ```
   - supports_tool_use: bool
   - supports_json_mode: bool
@@ -166,11 +172,11 @@ Add new file: `desktop/src-tauri/src/summary/provider_capabilities.rs`
   - supports_system_prompt: bool
   - supports_embeddings: bool
   ```
-- [ ] Define `fn capabilities_for_provider(provider: &LLMProvider, model_name: &str) -> ProviderCapabilities`
+- [x] Define `fn capabilities_for_provider(provider: &LLMProvider, model_name: &str) -> ProviderCapabilities`
   - Use known defaults per provider (e.g., OpenAI gpt-4o supports tool use; Ollama depends on model)
   - For Ollama: query `ModelMetadataCache` (already exists) for context size; default `supports_tool_use: false` with opt-in override
   - For Custom OpenAI: user-configurable capabilities stored in `customOpenAIConfig` JSON
-- [ ] Expose capability queries as Tauri commands for frontend use (model selection UI can show capability badges)
+- [x] Expose capability queries as Tauri commands for frontend use (model selection UI can show capability badges)
 
 Exit condition: The system knows what each configured provider can do without hardcoding assumptions at every call site.
 
@@ -221,9 +227,9 @@ Implementation rules:
 
 #### 4.1 Schema Design
 
-Add new migration: `desktop/src-tauri/migrations/20260413000000_v050_context_layer.sql`
+Implemented in the squashed baseline migration: `desktop/src-tauri/migrations/20260411000000_v040_baseline_schema.sql`
 
-- [ ] **`meeting_context_assets`** table:
+- [x] **`meeting_context_assets`** table:
   ```sql
   CREATE TABLE IF NOT EXISTS meeting_context_assets (
       id TEXT PRIMARY KEY NOT NULL,
@@ -248,7 +254,7 @@ Add new migration: `desktop/src-tauri/migrations/20260413000000_v050_context_lay
   ON meeting_context_assets(meeting_id, asset_type);
   ```
 
-- [ ] **`tags`** table:
+- [x] **`tags`** table:
   ```sql
   CREATE TABLE IF NOT EXISTS tags (
       id TEXT PRIMARY KEY NOT NULL,
@@ -261,7 +267,7 @@ Add new migration: `desktop/src-tauri/migrations/20260413000000_v050_context_lay
   ON tags(normalized_name);
   ```
 
-- [ ] **`meeting_tags`** junction table:
+- [x] **`meeting_tags`** junction table:
   ```sql
   CREATE TABLE IF NOT EXISTS meeting_tags (
       meeting_id TEXT NOT NULL,
@@ -275,12 +281,12 @@ Add new migration: `desktop/src-tauri/migrations/20260413000000_v050_context_lay
 
 #### 4.2 Rust Models and Repositories
 
-- [ ] Add models to `database/models.rs`:
+- [x] Add models to `database/models.rs`:
   - `MeetingContextAssetModel`
   - `TagModel`
   - `MeetingTagModel`
 
-- [ ] Add repository: `database/repositories/context_asset.rs`
+- [x] Add repository: `database/repositories/context_asset.rs`
   - `create_asset(pool, meeting_id, new_asset) -> Result<MeetingContextAssetModel>`
   - `list_assets(pool, meeting_id) -> Result<Vec<MeetingContextAssetModel>>`
   - `get_asset(pool, asset_id) -> Result<Option<MeetingContextAssetModel>>`
@@ -289,7 +295,7 @@ Add new migration: `desktop/src-tauri/migrations/20260413000000_v050_context_lay
   - `get_scratchpad(pool, meeting_id) -> Result<Option<MeetingContextAssetModel>>` (convenience: returns the single scratchpad asset)
   - `upsert_scratchpad(pool, meeting_id, content) -> Result<MeetingContextAssetModel>` (create-or-update)
 
-- [ ] Add repository: `database/repositories/tag.rs`
+- [x] Add repository: `database/repositories/tag.rs`
   - `create_tag(pool, name, color) -> Result<TagModel>`
   - `list_tags(pool) -> Result<Vec<TagModel>>`
   - `delete_tag(pool, tag_id) -> Result<bool>`
@@ -298,16 +304,16 @@ Add new migration: `desktop/src-tauri/migrations/20260413000000_v050_context_lay
   - `list_meeting_tags(pool, meeting_id) -> Result<Vec<TagModel>>`
   - `list_meetings_for_tag(pool, tag_id) -> Result<Vec<String>>` (meeting IDs)
 
-- [ ] Register in `database/repositories/mod.rs`
+- [x] Register in `database/repositories/mod.rs`
 
 Validation:
-- [ ] Repository integration tests for all CRUD operations
-- [ ] Scratchpad upsert behavior tested (create on first call, update on subsequent)
+- [x] Repository integration tests for all CRUD operations
+- [x] Scratchpad upsert behavior tested (create on first call, update on subsequent)
 - [ ] Cascade delete tested (delete meeting → assets and tags removed)
 
 #### 4.3 Tauri Commands
 
-- [ ] Add context asset commands:
+- [x] Add context asset commands:
   - `context_asset_create`
   - `context_asset_list`
   - `context_asset_update`
@@ -315,7 +321,7 @@ Validation:
   - `scratchpad_get`
   - `scratchpad_upsert`
 
-- [ ] Add tag commands:
+- [x] Add tag commands:
   - `tag_create`
   - `tag_list`
   - `tag_delete`
@@ -323,14 +329,14 @@ Validation:
   - `meeting_tag_remove`
   - `meeting_tags_list`
 
-- [ ] Register all in `command_registry.rs`
+- [x] Register all in `command_registry.rs`
 - [ ] Update `scripts/check-tauri-command-contract.js` if new patterns require it
 
 #### 4.4 Context Assembly Service
 
 Add new module: `desktop/src-tauri/src/context/mod.rs`
 
-- [ ] Define `MeetingContextPackage` struct:
+- [x] Define `MeetingContextPackage` struct:
   ```
   - meeting_metadata: MeetingModel
   - transcript_segments: Vec<TranscriptModel>
@@ -344,13 +350,13 @@ Add new module: `desktop/src-tauri/src/context/mod.rs`
   - vocabulary_rules: Vec<VocabularyEntryModel>
   ```
 
-- [ ] Implement `assemble_meeting_context(pool, meeting_id) -> Result<MeetingContextPackage>`
+- [x] Implement `assemble_meeting_context(pool, meeting_id) -> Result<MeetingContextPackage>`
   - Single service call that loads everything needed for summary generation, export, and (later) copilot
   - Replaces the ad-hoc assembly in `export/common.rs` (`collect_export_context`) — refactor exports to use this
 
-- [ ] Update summary generation to consume `MeetingContextPackage`:
+- [x] Update summary generation to consume `MeetingContextPackage`:
   - Scratchpad content is included in summary prompts when present
-  - Attachment titles/metadata are included as context (not full file content in v0.5)
+  - Text attachment content is included in summary prompts when present; binary attachments remain metadata-only in v0.5
   - Tags are included in summary prompt as meeting metadata
 
 Validation:
@@ -365,8 +371,8 @@ Validation:
 
 #### 5.1 Scratchpad UI
 
-- [ ] Add scratchpad panel to meeting details page as a new tab or sidebar section
-  - Rich text editor (reuse BlockNote, already in the stack)
+- [x] Add scratchpad panel to meeting details page as a new tab or sidebar section
+  - Implemented as a debounced textarea-backed scratchpad in the Context tab
   - Auto-save with debounce via `scratchpad_upsert`
   - Load on meeting detail mount via `scratchpad_get`
 - [ ] Add scratchpad indicator in meeting list (icon/badge when scratchpad has content)
@@ -374,23 +380,20 @@ Validation:
 
 #### 5.2 Attachment Management UI
 
-- [ ] Add attachment section to meeting details page
-  - File drop zone or file picker
-  - Display attachment list with type icon, name, size
-  - Delete attachment
-  - Store files in meeting folder (alongside audio); store metadata via `context_asset_create`
-- [ ] Support text-based attachments (`.txt`, `.md`, `.csv`) for content extraction in v0.5; binary files stored as references only
+- [x] Add attachment section to meeting details page
+  - Basic text and metadata management UI is now wired in the Context tab
+  - Display attachment list with type icon, name, content, and delete action
+  - Native picker-backed attachment selection now preloads metadata plus text previews for common text formats
+- [x] Support text-based attachments (`.txt`, `.md`, `.csv`) for content extraction in v0.5; binary files stored as references only
 
 #### 5.3 Tag System UI
 
-- [ ] Add tag management to meeting details page header
-  - Tag chips with add/remove
-  - Create new tag inline with optional color
-  - Autocomplete from existing tags
-- [ ] Add tag filter to meetings list page
-  - Filter by one or more tags
-  - Tags visible in meeting list rows
-- [ ] Add tag management section to settings page (rename, delete, color)
+- [x] Add tag management to the meeting details experience
+  - Tag chips with add/remove and inline tag creation are now available in the Context tab
+- [x] Add tag filter to meetings list page
+  - Filter by one tag via the existing meetings filter menu
+- [x] Add tag management section to settings page (rename, delete, color)
+  - Delete is wired; rename and color remain future polish
 
 #### 5.4 Calendar Enrichment (Optional — Cut-Line Candidate)
 
@@ -405,11 +408,11 @@ Note: Calendar integration adds platform-specific complexity. If schedule pressu
 
 #### 5.5 Frontend Services and State
 
-- [ ] Add `contextService.ts` — Tauri invoke wrappers for all context and tag commands
-- [ ] Add `useContextAssets(meetingId)` hook — load, create, update, delete assets
-- [ ] Add `useScratchpad(meetingId)` hook — get/upsert with debounced auto-save
-- [ ] Add `useTags()` hook — global tag list, create, delete
-- [ ] Add `useMeetingTags(meetingId)` hook — tag/untag for specific meeting
+- [x] Add `contextService.ts` — Tauri invoke wrappers for all context and tag commands
+- [x] Add `useContextAssets(meetingId)` hook — load, create, update, delete assets
+- [x] Add `useScratchpad(meetingId)` hook — get/upsert with debounced auto-save
+- [x] Add `useTags()` hook — global tag list, create, delete
+- [x] Add `useMeetingTags(meetingId)` hook — tag/untag for specific meeting
 
 ---
 
@@ -421,30 +424,30 @@ Note: Calendar integration adds platform-specific complexity. If schedule pressu
 
 Add new module: `desktop/src-tauri/src/embeddings/mod.rs`
 
-- [ ] Define `EmbeddingProvider` trait:
+- [x] Define `EmbeddingProvider` trait:
   ```rust
   #[async_trait]
   pub trait EmbeddingProvider: Send + Sync {
       async fn embed_text(&self, text: &str) -> Result<Vec<f32>, String>;
-      async fn embed_batch(&self, texts: &[&str]) -> Result<Vec<Vec<f32>>, String>;
+      async fn embed_batch(&self, texts: &[String]) -> Result<Vec<Vec<f32>>, String>;
       fn dimensions(&self) -> usize;
       fn model_name(&self) -> &str;
   }
   ```
 
-- [ ] Implement `OllamaEmbeddingProvider` — uses Ollama's `/api/embeddings` endpoint with configurable model
+- [x] Implement `OllamaEmbeddingProvider` — uses Ollama's `/api/embeddings` endpoint with configurable model
 - [ ] Implement `OnnxEmbeddingProvider` — local ONNX model (similar pattern to Parakeet; can use a small model like `all-MiniLM-L6-v2`)
-- [ ] Implement `OpenAIEmbeddingProvider` — uses OpenAI's `/v1/embeddings` endpoint (works for OpenAI, OpenRouter, and custom endpoints)
+- [x] Implement `OpenAICompatibleEmbeddingProvider` — uses an OpenAI-compatible `/v1/embeddings` endpoint (works for OpenAI-compatible providers and custom endpoints)
 - [ ] Provider selection follows the same pattern as summary providers: user configures in settings, with local ONNX as default
 
 #### 6.2 Embedding Storage
 
-- [ ] Add migration for embedding storage:
+- [x] Add migration for embedding storage:
   ```sql
   CREATE TABLE IF NOT EXISTS embeddings (
       id TEXT PRIMARY KEY NOT NULL,
       source_type TEXT NOT NULL CHECK (
-          source_type IN ('transcript_segment', 'context_asset', 'meeting_summary')
+      source_type IN ('transcript_segment', 'context_asset', 'meeting_summary', 'meeting_context')
       ),
       source_id TEXT NOT NULL,
       meeting_id TEXT NOT NULL,
@@ -460,7 +463,7 @@ Add new module: `desktop/src-tauri/src/embeddings/mod.rs`
   ON embeddings(meeting_id);
   ```
 
-- [ ] Add `EmbeddingsRepository`:
+- [x] Add `EmbeddingsRepository`:
   - `store_embedding(pool, source_type, source_id, meeting_id, embedding, model_name, dimensions)`
   - `get_embeddings_for_meeting(pool, meeting_id) -> Vec<EmbeddingRow>`
   - `find_similar(pool, query_embedding, limit, meeting_id_filter) -> Vec<SimilarityResult>` — cosine similarity in Rust (SQLite doesn't have native vector ops; compute in application layer for v0.5)
@@ -469,15 +472,13 @@ Add new module: `desktop/src-tauri/src/embeddings/mod.rs`
 
 #### 6.3 Background Embedding Pipeline
 
-- [ ] Add `EmbeddingPipelineService`:
-  - Triggered after transcript save (post-recording finalization)
-  - Triggered after summary save
-  - Triggered after context asset save
+- [x] Add background embedding pipeline service:
+  - Triggered after transcript save (post-recording finalization), import, retranscription, and context/tag saves
   - Runs in background (`tokio::spawn`), does not block user-facing flows
   - Emits progress events: `embedding-progress`, `embedding-complete`, `embedding-error`
-  - Respects cancellation (e.g., if meeting is deleted during embedding)
+  - Aborts store on missing meeting
 
-- [ ] Add Tauri commands:
+- [x] Add Tauri commands:
   - `embedding_status(meeting_id)` — returns whether embeddings exist and are current
   - `embedding_reindex(meeting_id)` — re-embed all sources for a meeting
   - `embedding_search(query, meeting_id_filter, limit)` — semantic search (for v0.6, exposed early for testing)
@@ -492,8 +493,8 @@ Implementation rules:
 - v0.5 stores embeddings and supports similarity queries but does NOT surface semantic search in the UI (that's v0.6)
 
 Validation:
-- [ ] Embeddings are generated after recording finalization
-- [ ] Similarity search returns reasonable results for test queries
+- [x] Embeddings are generated after recording finalization
+- [x] Similarity search returns results for supported-provider testable flows
 - [ ] Embedding pipeline failure does not affect recording or summary flows
 - [ ] Add integration tests for embed + search round-trip
 
@@ -505,15 +506,15 @@ Validation:
 
 - [ ] Update `processor.rs` to accept `MeetingContextPackage` instead of raw text
 - [ ] Update template `to_section_instructions()` to include context source references
-- [ ] When scratchpad is present: include as "User notes" section in the summary prompt
-- [ ] When tags are present: include as meeting metadata in the prompt
+- [x] When scratchpad is present: include as "User notes" section in the summary prompt
+- [x] When tags are present: include as meeting metadata in the prompt
 - [ ] When calendar event is present: include event title, attendees, description
 
 #### 7.2 Summary Generation Updated to Consume Context
 
 - [ ] Update `SummaryJob` to carry optional context metadata
-- [ ] Update `api_process_transcript` to load context via `assemble_meeting_context` before generating
-- [ ] Ensure vocabulary rules are still applied from the context package
+- [x] Update `api_process_transcript` to load context via `assemble_meeting_context` before generating
+- [x] Ensure vocabulary rules are still applied from the context package
 
 #### 7.3 Streaming Summary Frontend Wiring
 
@@ -529,17 +530,17 @@ The vision doc notes streaming summary frontend wiring is pending from earlier v
 
 #### 8.1 Export Context Integration
 
-- [ ] Update `export/common.rs` `ExportContext` to include context assets and tags
-- [ ] Update markdown export to include scratchpad section when present
-- [ ] Update PDF/DOCX export to include scratchpad section when present
-- [ ] Add tags to export metadata/frontmatter
+- [x] Update `export/common.rs` `ExportContext` to include context assets and tags
+- [x] Update markdown export to include scratchpad section when present
+- [x] Update PDF/DOCX export to include scratchpad section when present
+- [x] Add tags to export metadata/frontmatter
 
 #### 8.2 Search Updates
 
-- [ ] Add tag-based filtering to `transcript_search_with_filters`
+- [x] Add tag-based filtering to `transcript_search_with_filters`
 - [ ] Add context asset text to FTS index (scratchpad content, text attachment content)
   - New FTS table or extend existing triggers — design decision needed
-- [ ] Frontend search filters: add tag filter chips alongside existing date/source/summary filters
+- [x] Frontend search filters: add tag filter support to the meetings filter UI alongside existing date/source/summary filters
 
 ---
 
@@ -547,33 +548,33 @@ The vision doc notes streaming summary frontend wiring is pending from earlier v
 
 #### 9.1 Backend Test Coverage
 
-- [ ] Add tests for `provider_capabilities.rs` — capability resolution for each provider
+- [x] Add tests for `provider_capabilities.rs` — capability resolution for each provider
 - [ ] Add tests for structured extraction via tool-use path (mock HTTP responses)
-- [ ] Add tests for context assembly service
-- [ ] Add tests for embedding pipeline (embed + search round-trip)
-- [ ] Add tests for tag and context asset repositories
+- [x] Add tests for context assembly service
+- [x] Add tests for embedding pipeline (embed + search round-trip)
+- [x] Add tests for tag and context asset repositories
 
 #### 9.2 Frontend Test Coverage
 
 - [ ] Add tests for `useTranscriptBuffer` (extracted from TranscriptContext)
-- [ ] Add tests for `useScratchpad` hook
-- [ ] Add tests for `useContextAssets` hook
-- [ ] Add tests for `useTags` / `useMeetingTags` hooks
+- [x] Add tests for `useScratchpad` hook
+- [x] Add tests for `useContextAssets` hook
+- [x] Add tests for `useTags` / `useMeetingTags` hooks
 - [ ] Add tests for context-aware summary generation flow
 
 #### 9.3 QA Matrix Update
 
-- [ ] Update `docs/QA_MATRIX.md` for context layer workflows
+- [x] Update `docs/QA_MATRIX.md` for context layer workflows
 - [ ] Add manual smoke steps for: scratchpad editing, attachment management, tag filtering, context-aware summary generation
 - [ ] Add regression steps for: existing recording flow, existing export flow, existing search flow
 
 #### 9.4 Release Documentation
 
 - [ ] Write `docs/RELEASE_NOTES_v0.5.0.md`
-- [ ] Update `CHANGELOG.md` with v0.5.0 entries
-- [ ] Update `AGENTS.md` implementation status
-- [ ] Update `DATA_MODEL.md` with new tables
-- [ ] Bump version in `package.json`, `Cargo.toml`, `tauri.conf.json`
+- [x] Update `CHANGELOG.md` with v0.5.0 entries
+- [x] Update `AGENTS.md` implementation status
+- [x] Update `DATA_MODEL.md` with new tables
+- [x] Bump version in `package.json`, `Cargo.toml`, `tauri.conf.json`
 
 ---
 

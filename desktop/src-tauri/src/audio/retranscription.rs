@@ -599,6 +599,8 @@ async fn run_retranscription<R: Runtime>(
         warn!("Failed to update metadata.json: {}", e);
     }
 
+    crate::embeddings::spawn_meeting_embedding_reindex(app.clone(), meeting_id.clone());
+
     emit_progress(
         &app,
         &meeting_id,

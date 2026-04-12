@@ -158,10 +158,7 @@ pub fn format_context_for_prompt(package: &MeetingContextPackage) -> String {
         if let Some(ref content) = asset.content {
             let trimmed = content.trim();
             if !trimmed.is_empty() {
-                let title = asset
-                    .title
-                    .as_deref()
-                    .unwrap_or("Attached Context");
+                let title = asset.title.as_deref().unwrap_or("Attached Context");
                 sections.push(format!("## {}\n\n{}", title, trimmed));
             }
         }

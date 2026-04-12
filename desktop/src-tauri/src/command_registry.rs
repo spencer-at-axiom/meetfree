@@ -126,6 +126,8 @@ macro_rules! app_invoke_handler {
             summary::api_get_template_details,
             summary::api_validate_template,
             summary::generate_summary_streaming,
+            summary::provider_capabilities::summary_provider_capabilities,
+            summary::provider_capabilities::current_summary_provider_capabilities,
             // Notifications commands (only frontend-used subset)
             notifications::commands::get_notification_settings,
             notifications::commands::set_notification_settings,
@@ -162,6 +164,7 @@ macro_rules! app_invoke_handler {
             database::context_commands::meeting_tag_remove,
             database::context_commands::meeting_tags_list,
             database::context_commands::meeting_context_get,
+            database::context_commands::select_context_attachment,
             onboarding::get_onboarding_status,
             onboarding::save_onboarding_status_cmd,
             onboarding::reset_onboarding_status_cmd,
@@ -180,6 +183,7 @@ macro_rules! app_invoke_handler {
             database::backup::list_database_backups,
             database::backup::cleanup_old_backups,
             embeddings::commands::embedding_status,
+            embeddings::commands::embedding_reindex,
             embeddings::commands::embedding_search,
             // Platform-specific commands
             #[cfg(target_os = "macos")]

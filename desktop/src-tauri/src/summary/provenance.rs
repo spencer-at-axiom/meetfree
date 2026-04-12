@@ -7,7 +7,7 @@ use once_cell::sync::Lazy;
 use sqlx::SqlitePool;
 use std::collections::HashSet;
 
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, Default)]
 pub struct ProvenanceData {
     pub source_transcript_id: Option<String>,
     pub source_start_ms: Option<i64>,
@@ -22,17 +22,6 @@ pub struct ProvenanceMatch {
     pub coverage_ratio: f32,
     pub exact_phrase_match: bool,
     pub matched_terms: Vec<String>,
-}
-
-impl Default for ProvenanceData {
-    fn default() -> Self {
-        Self {
-            source_transcript_id: None,
-            source_start_ms: None,
-            source_end_ms: None,
-            source_excerpt: None,
-        }
-    }
 }
 
 /// Find provenance data for a given text by searching transcripts

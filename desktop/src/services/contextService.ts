@@ -23,6 +23,16 @@ export interface Tag {
   created_at: string;
 }
 
+export interface ContextAttachmentSelection {
+  path: string;
+  filename: string;
+  title: string;
+  file_mime_type: string | null;
+  file_size_bytes: number;
+  content: string | null;
+  content_was_truncated: boolean;
+}
+
 export interface MeetingContextPackage {
   meeting_metadata: Record<string, unknown>;
   transcript_segments: Record<string, unknown>[];
@@ -137,6 +147,10 @@ export async function meetingContextGet(args: { meetingId: string }): Promise<Me
   return invoke<MeetingContextPackage>('meeting_context_get', {
     meeting_id: args.meetingId,
   });
+}
+
+export async function selectContextAttachment(): Promise<ContextAttachmentSelection | null> {
+  return invoke<ContextAttachmentSelection | null>('select_context_attachment');
 }
 
 export async function getScratchpadContent(meetingId: string): Promise<string | null> {

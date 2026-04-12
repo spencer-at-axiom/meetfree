@@ -1,6 +1,6 @@
-use crate::database::models::TagModel;
 #[cfg(test)]
 use crate::database::models::MeetingTagModel;
+use crate::database::models::TagModel;
 use sqlx::SqlitePool;
 
 pub struct TagsRepository;
@@ -166,7 +166,9 @@ mod tests {
         assert_eq!(beta.normalized_name, "beta");
         assert_eq!(beta.color, Some("#ff0000".to_string()));
 
-        let alpha = TagsRepository::create_tag(&pool, "Alpha", None).await.unwrap();
+        let alpha = TagsRepository::create_tag(&pool, "Alpha", None)
+            .await
+            .unwrap();
         assert_eq!(alpha.normalized_name, "alpha");
 
         let tags = TagsRepository::list_tags(&pool).await.unwrap();
@@ -178,9 +180,13 @@ mod tests {
     #[tokio::test]
     async fn test_tag_and_untag_meeting() {
         let pool = setup_test_db().await;
-        let tag = TagsRepository::create_tag(&pool, "work", None).await.unwrap();
+        let tag = TagsRepository::create_tag(&pool, "work", None)
+            .await
+            .unwrap();
 
-        TagsRepository::tag_meeting(&pool, "m1", &tag.id).await.unwrap();
+        TagsRepository::tag_meeting(&pool, "m1", &tag.id)
+            .await
+            .unwrap();
 
         let junction: Vec<MeetingTagModel> = sqlx::query_as(
             "SELECT meeting_id, tag_id, created_at FROM meeting_tags WHERE meeting_id = ?",
@@ -192,7 +198,9 @@ mod tests {
         assert_eq!(junction.len(), 1);
         assert_eq!(junction[0].tag_id, tag.id);
 
-        let listed = TagsRepository::list_meeting_tags(&pool, "m1").await.unwrap();
+        let listed = TagsRepository::list_meeting_tags(&pool, "m1")
+            .await
+            .unwrap();
         assert_eq!(listed.len(), 1);
         assert_eq!(listed[0].id, tag.id);
 
@@ -213,8 +221,12 @@ mod tests {
     #[tokio::test]
     async fn test_delete_tag_cascades() {
         let pool = setup_test_db().await;
-        let tag = TagsRepository::create_tag(&pool, "temp", None).await.unwrap();
-        TagsRepository::tag_meeting(&pool, "m1", &tag.id).await.unwrap();
+        let tag = TagsRepository::create_tag(&pool, "temp", None)
+            .await
+            .unwrap();
+        TagsRepository::tag_meeting(&pool, "m1", &tag.id)
+            .await
+            .unwrap();
 
         assert!(TagsRepository::delete_tag(&pool, &tag.id).await.unwrap());
 

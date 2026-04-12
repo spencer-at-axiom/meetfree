@@ -73,7 +73,8 @@ pub fn build_docx_document(context: &ExportContext) -> Result<Vec<u8>, String> {
 
     if !context.tags.is_empty() {
         docx = docx.add_paragraph(
-            Paragraph::new().add_run(Run::new().add_text(format!("Tags: {}", context.tags.join(", ")))),
+            Paragraph::new()
+                .add_run(Run::new().add_text(format!("Tags: {}", context.tags.join(", ")))),
         );
     }
 

@@ -921,6 +921,7 @@ pub async fn api_save_transcript<R: Runtime>(
                 "Successfully saved transcript and created meeting with id: {}",
                 meeting_id
             );
+            crate::embeddings::spawn_meeting_embedding_reindex(app, meeting_id.clone());
             Ok(serde_json::json!({
                 "status": "success",
                 "message": "Transcript saved successfully",

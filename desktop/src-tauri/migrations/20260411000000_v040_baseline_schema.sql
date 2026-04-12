@@ -299,7 +299,7 @@ CREATE TABLE IF NOT EXISTS meeting_tags (
 CREATE TABLE IF NOT EXISTS embeddings (
     id TEXT PRIMARY KEY NOT NULL,
     source_type TEXT NOT NULL CHECK (
-        source_type IN ('transcript_segment', 'context_asset', 'meeting_summary')
+        source_type IN ('transcript_segment', 'context_asset', 'meeting_summary', 'meeting_context')
     ),
     source_id TEXT NOT NULL,
     meeting_id TEXT NOT NULL,

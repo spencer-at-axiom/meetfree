@@ -1,6 +1,7 @@
 import { useState, useEffect, useCallback } from 'react';
 import {
   contextAssetCreate,
+  contextAssetUpdate,
   contextAssetList,
   contextAssetDelete,
 } from '@/services/contextService';
@@ -67,5 +68,32 @@ export function useContextAssets(meetingId: string | null) {
     setAssets((prev) => prev.filter((a) => a.id !== assetId));
   }, []);
 
-  return { assets, createAsset, deleteAsset, isLoading };
+  const updateAsset = useCallback(
+    async (
+      assetId: string,
+      updates: {
+        title?: string;
+        content?: string;
+      }
+    ) => {
+      await contextAssetUpdate({
+        assetId,
+        ...updates,
+      });
+      setAssets((prev) =>
+        prev.map((asset) =>
+          asset.id === assetId
+            ? {
+              ...asset,
+              title: updates.title ?? asset.title,
+              content: updates.content ?? asset.content,
+            }
+            : asset
+        )
+      );
+    },
+    []
+  );
+
+  return { assets, createAsset, updateAsset, deleteAsset, isLoading };
 }

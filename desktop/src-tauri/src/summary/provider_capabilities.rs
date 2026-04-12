@@ -1,5 +1,9 @@
 use super::llm_client::LLMProvider;
 use serde::{Deserialize, Serialize};
+use tauri::{AppHandle, Manager};
+
+use crate::database::repositories::setting::SettingsRepository;
+use crate::state::AppState;
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct ProviderCapabilities {
@@ -13,6 +17,7 @@ pub struct ProviderCapabilities {
 }
 
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
 pub enum ExtractionStrategy {
     ToolUse,
     JsonMode,
@@ -114,6 +119,76 @@ pub fn capabilities_for_provider(provider: &LLMProvider, model_name: &str) -> Pr
     }
 }
 
+#[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct ProviderCapabilitiesView {
+    pub provider: String,
+    pub model_name: String,
+    pub supports_tool_use: bool,
+    pub supports_json_mode: bool,
+    pub supports_streaming: bool,
+    pub max_context_tokens: Option<usize>,
+    pub supports_system_prompt: bool,
+    pub supports_embeddings: bool,
+    pub supports_structured_output: bool,
+    pub extraction_strategy: ExtractionStrategy,
+}
+
+impl ProviderCapabilitiesView {
+    fn from_parts(provider: &str, model_name: &str, capabilities: ProviderCapabilities) -> Self {
+        let extraction_strategy = capabilities.extraction_strategy();
+        Self {
+            provider: provider.to_string(),
+            model_name: model_name.to_string(),
+            supports_tool_use: capabilities.supports_tool_use,
+            supports_json_mode: capabilities.supports_json_mode,
+            supports_streaming: capabilities.supports_streaming,
+            max_context_tokens: capabilities.max_context_tokens,
+            supports_system_prompt: capabilities.supports_system_prompt,
+            supports_embeddings: capabilities.supports_embeddings,
+            supports_structured_output: capabilities.supports_structured_output,
+            extraction_strategy,
+        }
+    }
+}
+
+#[tauri::command]
+pub async fn summary_provider_capabilities(
+    provider: String,
+    model_name: String,
+) -> Result<ProviderCapabilitiesView, String> {
+    let parsed_provider: LLMProvider = provider.parse()?;
+    let capabilities = capabilities_for_provider(&parsed_provider, &model_name);
+    Ok(ProviderCapabilitiesView::from_parts(
+        &provider,
+        &model_name,
+        capabilities,
+    ))
+}
+
+#[tauri::command]
+pub async fn current_summary_provider_capabilities(
+    app: AppHandle,
+) -> Result<Option<ProviderCapabilitiesView>, String> {
+    let state = app.state::<AppState>();
+    let pool = state.db_manager.pool();
+    let config = SettingsRepository::get_model_config(pool)
+        .await
+        .map_err(|e| format!("Failed to load model config: {}", e))?;
+
+    let Some(config) = config else {
+        return Ok(None);
+    };
+
+    let parsed_provider: LLMProvider = config.provider.parse()?;
+    let capabilities = capabilities_for_provider(&parsed_provider, &config.model);
+    Ok(Some(ProviderCapabilitiesView::from_parts(
+        &config.provider,
+        &config.model,
+        capabilities,
+    )))
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -163,7 +238,10 @@ mod tests {
         assert_eq!(openai.extraction_strategy(), ExtractionStrategy::ToolUse);
 
         let ollama = capabilities_for_provider(&LLMProvider::Ollama, "mistral");
-        assert_eq!(ollama.extraction_strategy(), ExtractionStrategy::MarkdownParsing);
+        assert_eq!(
+            ollama.extraction_strategy(),
+            ExtractionStrategy::MarkdownParsing
+        );
     }
 
     #[test]

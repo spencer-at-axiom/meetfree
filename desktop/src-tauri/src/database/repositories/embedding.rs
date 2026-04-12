@@ -178,9 +178,7 @@ mod tests {
     use sqlx::SqlitePool;
 
     async fn setup_pool() -> SqlitePool {
-        let pool = SqlitePool::connect("sqlite::memory:")
-            .await
-            .expect("pool");
+        let pool = SqlitePool::connect("sqlite::memory:").await.expect("pool");
 
         sqlx::query(
             "CREATE TABLE meetings (
@@ -262,7 +260,9 @@ mod tests {
         let pool = setup_pool().await;
         seed_meeting(&pool, "m1").await;
 
-        assert!(!EmbeddingsRepository::has_embeddings(&pool, "m1").await.unwrap());
+        assert!(!EmbeddingsRepository::has_embeddings(&pool, "m1")
+            .await
+            .unwrap());
 
         EmbeddingsRepository::store_embedding(
             &pool,
@@ -275,7 +275,9 @@ mod tests {
         .await
         .unwrap();
 
-        assert!(EmbeddingsRepository::has_embeddings(&pool, "m1").await.unwrap());
+        assert!(EmbeddingsRepository::has_embeddings(&pool, "m1")
+            .await
+            .unwrap());
     }
 
     #[tokio::test]
@@ -287,36 +289,15 @@ mod tests {
         let e2 = [0.0f32, 1.0, 0.0];
         let e3 = [0.0f32, 0.0, 1.0];
 
-        EmbeddingsRepository::store_embedding(
-            &pool,
-            "transcript_segment",
-            "a",
-            "m1",
-            &e1,
-            "m",
-        )
-        .await
-        .unwrap();
-        EmbeddingsRepository::store_embedding(
-            &pool,
-            "transcript_segment",
-            "b",
-            "m1",
-            &e2,
-            "m",
-        )
-        .await
-        .unwrap();
-        EmbeddingsRepository::store_embedding(
-            &pool,
-            "context_asset",
-            "c",
-            "m1",
-            &e3,
-            "m",
-        )
-        .await
-        .unwrap();
+        EmbeddingsRepository::store_embedding(&pool, "transcript_segment", "a", "m1", &e1, "m")
+            .await
+            .unwrap();
+        EmbeddingsRepository::store_embedding(&pool, "transcript_segment", "b", "m1", &e2, "m")
+            .await
+            .unwrap();
+        EmbeddingsRepository::store_embedding(&pool, "context_asset", "c", "m1", &e3, "m")
+            .await
+            .unwrap();
 
         let query = [0.99f32, 0.01, 0.0];
         let hits = EmbeddingsRepository::find_similar(&pool, &query, 3, Some("m1"))
@@ -355,13 +336,10 @@ mod tests {
         .await
         .unwrap();
 
-        let n = EmbeddingsRepository::delete_embeddings_for_source(
-            &pool,
-            "transcript_segment",
-            "x",
-        )
-        .await
-        .unwrap();
+        let n =
+            EmbeddingsRepository::delete_embeddings_for_source(&pool, "transcript_segment", "x")
+                .await
+                .unwrap();
         assert_eq!(n, 2);
 
         let list = EmbeddingsRepository::get_embeddings_for_meeting(&pool, "m1")

@@ -25,6 +25,7 @@ import { toast } from 'sonner';
 import { useMeetings, type Meeting } from '@/contexts/MeetingsContext';
 import { useConfirmationDialog } from '@/hooks/useConfirmationDialog';
 import { batchExportMeetings } from '@/services/exportService';
+import { useTags } from '@/hooks/useTags';
 import type { ExportFormat } from '@/types/export';
 import { cn } from '@/lib/utils';
 import { Button } from '@/components/ui/button';
@@ -89,10 +90,12 @@ export default function MeetingsPage() {
   const searchParams = useSearchParams();
   const { meetings, isLoading, refetchMeetings } = useMeetings();
   const { confirm, confirmationDialog } = useConfirmationDialog();
+  const { tags } = useTags();
 
   const [searchQuery, setSearchQuery] = useState('');
   const [meetingFilter, setMeetingFilter] = useState<MeetingFilter>('all');
   const [meetingDateFilter, setMeetingDateFilter] = useState<MeetingDateFilter>('any-time');
+  const [selectedTagId, setSelectedTagId] = useState('');
   const [selectedMeetings, setSelectedMeetings] = useState<Set<string>>(new Set());
   const [isSelectionMode, setIsSelectionMode] = useState(false);
   const [focusedIndex, setFocusedIndex] = useState(-1);
@@ -112,7 +115,7 @@ export default function MeetingsPage() {
 
   useEffect(() => {
     const query = searchQuery.trim();
-    if (query.length < 2) {
+    if (query.length < 2 && !selectedTagId) {
       setFtsMatchIds(null);
       return;
     }
@@ -122,7 +125,14 @@ export default function MeetingsPage() {
       try {
         const res = await invoke<{ results: Array<{ id: string }> }>(
           'transcript_search_with_filters',
-          { query, limit: 200, offset: 0 }
+          {
+            request: {
+              query: query.length >= 2 ? query : null,
+              tagId: selectedTagId || null,
+              limit: 500,
+              offset: 0,
+            },
+          }
         );
         if (!cancelled) {
           setFtsMatchIds(new Set(res.results.map((r) => r.id)));
@@ -133,7 +143,7 @@ export default function MeetingsPage() {
     }, 250);
 
     return () => { cancelled = true; clearTimeout(timer); };
-  }, [searchQuery]);
+  }, [searchQuery, selectedTagId]);
 
   useEffect(() => {
     if (searchParams.get('action') !== 'batch-export') {
@@ -192,6 +202,7 @@ export default function MeetingsPage() {
           const titleMatch = !query || meeting.title.toLowerCase().includes(query);
           const ftsMatch = ftsMatchIds !== null ? ftsMatchIds.has(meeting.id) : false;
           const matchesQuery = !query || titleMatch || ftsMatch;
+          const matchesTag = !selectedTagId || ftsMatch;
           const matchesFilter =
             meetingFilter === 'all'
               ? true
@@ -210,18 +221,19 @@ export default function MeetingsPage() {
                     ? meetingDate >= thirtyDaysAgo
                     : meetingDate < thirtyDaysAgo;
 
-          return matchesQuery && matchesFilter && matchesDate;
+          return matchesQuery && matchesTag && matchesFilter && matchesDate;
         }),
       ] as MeetingGroup)
       .filter((entry) => entry[1].length > 0);
-  }, [groupedMeetings, searchQuery, meetingFilter, meetingDateFilter, ftsMatchIds]);
+  }, [groupedMeetings, searchQuery, selectedTagId, meetingFilter, meetingDateFilter, ftsMatchIds]);
 
   const flatMeetings = useMemo(
     () => filteredMeetings.flatMap(([_, groupMeetings]) => groupMeetings),
     [filteredMeetings]
   );
 
-  const hasActiveFilters = meetingFilter !== 'all' || meetingDateFilter !== 'any-time';
+  const hasActiveFilters =
+    meetingFilter !== 'all' || meetingDateFilter !== 'any-time' || !!selectedTagId;
 
   useEffect(() => {
     const handleKeyDown = (event: KeyboardEvent) => {
@@ -507,6 +519,29 @@ export default function MeetingsPage() {
                   <Check className={cn('h-4 w-4', meetingDateFilter === 'older' ? 'opacity-100' : 'opacity-0')} />
                   Older
                 </DropdownMenuItem>
+                <DropdownMenuSeparator />
+                <DropdownMenuLabel className="text-[11px] uppercase tracking-[0.16em] text-slate-400">Tag</DropdownMenuLabel>
+                <DropdownMenuSeparator />
+                <DropdownMenuItem onClick={() => setSelectedTagId('')} className="text-[13px]">
+                  <Check className={cn('h-4 w-4', !selectedTagId ? 'opacity-100' : 'opacity-0')} />
+                  Any tag
+                </DropdownMenuItem>
+                {tags.length === 0 ? (
+                  <DropdownMenuItem disabled className="text-[13px] text-slate-400">
+                    No tags created yet
+                  </DropdownMenuItem>
+                ) : (
+                  tags.map((tag) => (
+                    <DropdownMenuItem
+                      key={tag.id}
+                      onClick={() => setSelectedTagId(tag.id)}
+                      className="text-[13px]"
+                    >
+                      <Check className={cn('h-4 w-4', selectedTagId === tag.id ? 'opacity-100' : 'opacity-0')} />
+                      {tag.name}
+                    </DropdownMenuItem>
+                  ))
+                )}
                 {hasActiveFilters ? (
                   <>
                     <DropdownMenuSeparator />
@@ -514,6 +549,7 @@ export default function MeetingsPage() {
                       onClick={() => {
                         setMeetingFilter('all');
                         setMeetingDateFilter('any-time');
+                        setSelectedTagId('');
                       }}
                       className="text-[13px]"
                     >

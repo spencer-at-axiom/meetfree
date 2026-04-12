@@ -7,6 +7,7 @@ import {
   FilesAndStorageSettings,
   NotificationsSettings,
   RecordingSettings,
+  TagsSettings,
   TranscriptionSettings,
 } from '@/components/settings';
 import { useConfig } from '@/contexts/ConfigContext';
@@ -15,6 +16,7 @@ type SectionId =
   | 'recording'
   | 'transcription'
   | 'summaries'
+  | 'tags'
   | 'files'
   | 'notifications';
 
@@ -32,6 +34,7 @@ export default function SettingsPage() {
     recording: null,
     transcription: null,
     summaries: null,
+    tags: null,
     files: null,
     notifications: null,
   });
@@ -57,6 +60,11 @@ export default function SettingsPage() {
         id: 'summaries',
         label: 'Summaries',
         content: <SummaryModelSettings mode="full" />,
+      },
+      {
+        id: 'tags',
+        label: 'Tags',
+        content: <TagsSettings />,
       },
       {
         id: 'files',

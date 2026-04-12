@@ -129,15 +129,11 @@ impl ContextAssetsRepository {
         Ok(result.rows_affected() > 0)
     }
 
-    pub async fn delete_asset(
-        pool: &SqlitePool,
-        asset_id: &str,
-    ) -> Result<bool, sqlx::Error> {
-        let result =
-            sqlx::query("DELETE FROM meeting_context_assets WHERE id = ?")
-                .bind(asset_id)
-                .execute(pool)
-                .await?;
+    pub async fn delete_asset(pool: &SqlitePool, asset_id: &str) -> Result<bool, sqlx::Error> {
+        let result = sqlx::query("DELETE FROM meeting_context_assets WHERE id = ?")
+            .bind(asset_id)
+            .execute(pool)
+            .await?;
         Ok(result.rows_affected() > 0)
     }
 
@@ -224,7 +220,10 @@ mod tests {
         .execute(&pool)
         .await
         .unwrap();
-        sqlx::query("PRAGMA foreign_keys = ON").execute(&pool).await.unwrap();
+        sqlx::query("PRAGMA foreign_keys = ON")
+            .execute(&pool)
+            .await
+            .unwrap();
 
         let now = chrono::Utc::now().to_rfc3339();
         sqlx::query("INSERT INTO meetings (id, title, created_at, updated_at, source_type) VALUES ('m1', 'Test Meeting', ?, ?, 'recorded')")
@@ -256,7 +255,9 @@ mod tests {
         assert_eq!(asset.asset_type, "attachment");
         assert_eq!(asset.title, Some("agenda.md".to_string()));
 
-        let assets = ContextAssetsRepository::list_assets(&pool, "m1").await.unwrap();
+        let assets = ContextAssetsRepository::list_assets(&pool, "m1")
+            .await
+            .unwrap();
         assert_eq!(assets.len(), 1);
     }
 
@@ -276,7 +277,9 @@ mod tests {
         assert_eq!(pad2.id, pad1.id);
         assert_eq!(pad2.content, Some("Updated notes".to_string()));
 
-        let all = ContextAssetsRepository::list_assets(&pool, "m1").await.unwrap();
+        let all = ContextAssetsRepository::list_assets(&pool, "m1")
+            .await
+            .unwrap();
         assert_eq!(all.len(), 1);
     }
 

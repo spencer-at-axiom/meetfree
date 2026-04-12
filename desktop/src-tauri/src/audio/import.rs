@@ -692,6 +692,8 @@ async fn run_import<R: Runtime>(
         warn!("Failed to write metadata.json: {}", e);
     }
 
+    crate::embeddings::spawn_meeting_embedding_reindex(app.clone(), meeting_id.clone());
+
     emit_progress(&app, "complete", 100, "Import complete");
 
     Ok(ImportResult {

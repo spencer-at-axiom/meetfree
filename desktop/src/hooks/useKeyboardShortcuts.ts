@@ -84,6 +84,13 @@ export function useKeyboardShortcuts(options: UseKeyboardShortcutsOptions = {}) 
               options.onTabSwitch?.(1); // Summary
             }
             break;
+
+          case '3':
+            if (pathname?.includes('/meeting-details')) {
+              e.preventDefault();
+              options.onTabSwitch?.(2); // Context
+            }
+            break;
             
         }
       }

@@ -99,8 +99,8 @@ async fn parse_structured_artifacts_from_summary_payload_async(
 
     // Apply enhanced heuristics to extract additional items from full text
     let full_text = payload.markdown();
-    let heuristic_action_items = extract_action_items_from_text(&full_text);
-    let heuristic_decisions = extract_decisions_from_text(&full_text);
+    let heuristic_action_items = extract_action_items_from_text(full_text);
+    let heuristic_decisions = extract_decisions_from_text(full_text);
 
     // Add heuristic-extracted action items only when transcript evidence is strong enough.
     for extracted in heuristic_action_items {
@@ -141,9 +141,7 @@ async fn parse_structured_artifacts_from_summary_payload_async(
                 source_transcript_id: provenance.source_transcript_id,
                 source_start_ms: provenance.source_start_ms,
                 source_end_ms: provenance.source_end_ms,
-                source_excerpt: provenance
-                    .source_excerpt
-                    .or_else(|| Some(extracted.source_text)),
+                source_excerpt: provenance.source_excerpt.or(Some(extracted.source_text)),
                 extraction_method: "heuristic_evidence".to_string(),
                 extraction_version: "v0.4.0".to_string(),
             });
@@ -176,9 +174,7 @@ async fn parse_structured_artifacts_from_summary_payload_async(
                 source_transcript_id: provenance.source_transcript_id,
                 source_start_ms: provenance.source_start_ms,
                 source_end_ms: provenance.source_end_ms,
-                source_excerpt: provenance
-                    .source_excerpt
-                    .or_else(|| Some(extracted.source_text)),
+                source_excerpt: provenance.source_excerpt.or(Some(extracted.source_text)),
                 extraction_method: "heuristic_evidence".to_string(),
                 extraction_version: "v0.4.0".to_string(),
                 related_action_item_ids: None,

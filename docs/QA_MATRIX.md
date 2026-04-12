@@ -16,6 +16,10 @@ This matrix covers the highest-risk desktop regression workflows, verified again
 | 8 | IndexedDB recovery | Verified in code | Recovery detection, transcript preview, recovery save path, optional audio checkpoint recovery, and cleanup are implemented. |
 | 9 | Structured review workflow | Verified in code and targeted UI tests | Summary-tab review supports meeting speakers, action items, and decisions with explicit review-state actions and inline provenance evidence. |
 | 10 | Speaker identity inspection | Verified in code and targeted UI tests | Identity browser supports search, sort, quick-open inspection, grouped action-item review, and manual voice-profile CRUD. |
+| 11 | Context-aware summary prompt assembly | Verified in code and backend tests | Summary generation loads a meeting context package and merges scratchpad, tags, and text attachment content into the prompt when present. |
+| 12 | Tag-filtered transcript search | Verified in code, backend tests, and desktop UI wiring | Backend transcript search accepts `tagId`, the meetings page now exposes a tag filter, and meeting tags can be managed from the Context tab and Settings. |
+| 13 | Attachment picker and text ingestion | Verified in code and backend tests | The Context tab can now open a native file picker, store attachment metadata, and preload text previews for common text formats while leaving binary files metadata-only. |
+| 14 | Embedding retrieval foundation | Verified in code and backend tests | Embedding status, reindex, and semantic-search commands now work for supported providers, and backend tests now cover an embed-and-search round-trip. |
 
 ## Release-Blocking Regression Smoke Tests
 
@@ -202,10 +206,14 @@ This matrix covers the highest-risk desktop regression workflows, verified again
   - macOS/Linux shell: `bash scripts/release-smoke.sh`
 - Manual sign-off requires the recording smoke tests above plus the structured-review and identity-inspection checks to pass on the target release build.
 
-Current environment note:
+Current verification note (run locally on April 11, 2026):
 
-- `cargo check -p meetfree --lib` is currently green.
-- `cargo test -p meetfree --lib` is currently green.
+- `cargo check -p meetfree --lib` passed.
+- `cargo test -p meetfree --lib` passed with `261 passed`, `0 failed`, and `4 ignored`.
+- `cargo fmt -p meetfree -- --check` passed.
+- `cargo clippy -p meetfree -- -D warnings` passed.
+- `pnpm.cmd run lint` passed in `desktop/`.
+- `pnpm.cmd run test` passed in `desktop/` with `15` test files and `61` tests green.
 
 ## Priority Action Checklist
 

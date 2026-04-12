@@ -1,12 +1,12 @@
 # MeetFree Product Vision and Engineering Roadmap to v1.0.0
 
-Last updated: April 10, 2026
-Status: Draft
-Baseline: v0.3.0 complete
+Last updated: April 11, 2026
+Status: Draft, updated for shipped v0.4.0 and in-progress v0.5.0 foundation work
+Baseline: v0.4.0 complete
 
 ## 1. Objective
 
-Define the product and technical path from the current `v0.3.0` baseline to a `v1.0.0` release where `Live Meeting Copilot` is the primary product differentiator.
+Define the product and technical path from the current `v0.4.0` baseline to a `v1.0.0` release where `Live Meeting Copilot` is the primary product differentiator.
 
 This document is intended for engineering planning. It defines:
 
@@ -284,6 +284,8 @@ This is the differentiating layer and should be built only after Layers A throug
 
 ### v0.4.0 - Identity and Structured Artifacts
 
+Status: Complete in the current codebase.
+
 Objective:
 
 Introduce the durable entities required for future copilot grounding.
@@ -304,6 +306,8 @@ Release gate:
 
 ### v0.5.0 - Context Ingestion and Preparation
 
+Status: In progress.
+
 Objective:
 
 Add the meeting-scoped context layer required for grounded live assistance.
@@ -316,6 +320,21 @@ Required deliverables:
 - optional calendar enrichment
 - tag system
 - summary generation updated to consume structured context sources
+
+Verified in the current repo:
+
+- scratchpad, attachment, note, and calendar-event context asset schema and commands exist
+- tag schema, meeting-tag links, and backend tag-filtered transcript search exist
+- summary generation assembles a meeting context package and merges scratchpad, tags, and text attachment content into the prompt when present
+- export assembly includes scratchpad and tags
+- embedding storage and provider abstractions exist as foundation work
+
+Still open in this release:
+
+- provider-capability-driven badges in the model-selection UI
+- adaptive structured extraction by provider capability
+- semantic retrieval user workflows beyond command-level plumbing
+- calendar enrichment beyond the schema and asset type
 
 Release gate:
 
@@ -514,7 +533,7 @@ Before `v0.9.0`, define a repeatable evaluation set for:
 
 This document should be followed by:
 
-1. a technical release plan for `v0.4.0`
-2. a schema design for speaker identity, tasks, decisions, and context assets
-3. a context assembly design
+1. the active `v0.5.0` implementation plan in `docs/V050_IMPLEMENTATION_PLAN.md`
+2. a deeper design for provider-capability-driven structured extraction if that work continues in `v0.5.0`
+3. a meeting-memory and retrieval design for `v0.6.0`
 4. a live copilot evaluation plan

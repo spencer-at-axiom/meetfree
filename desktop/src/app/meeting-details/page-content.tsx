@@ -2,13 +2,14 @@
 
 import { useEffect, useRef, useState } from 'react';
 import { motion } from 'framer-motion';
-import { ArrowLeft, Download, FileText, Sparkles } from 'lucide-react';
+import { ArrowLeft, Download, FileText, NotebookPen, Sparkles } from 'lucide-react';
 import { useRouter } from 'next/navigation';
 import { invoke } from '@tauri-apps/api/core';
 import { toast } from 'sonner';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { Button } from '@/components/ui/button';
 import { TranscriptTab } from '@/components/MeetingTabs/TranscriptTab';
+import { ContextTab } from '@/components/MeetingTabs/ContextTab';
 import { SumTab } from '@/components/MeetingTabs/SummaryTab';
 import { ExportDialog } from '@/components/MeetingDetails/ExportDialog';
 import {
@@ -77,7 +78,7 @@ export default function PageContent({
 
   useKeyboardShortcuts({
     onTabSwitch: (tabIndex: number) => {
-      const tabs = ['transcript', 'summary'];
+      const tabs = ['transcript', 'summary', 'context'];
       setActiveTab(tabs[tabIndex]);
     },
     onSave: async () => {
@@ -272,6 +273,13 @@ export default function PageContent({
               <Sparkles className="h-4 w-4" />
               Summary
             </TabsTrigger>
+            <TabsTrigger
+              value="context"
+              className="rounded-full px-4 py-2 text-sm font-medium text-slate-600 data-[state=active]:bg-white data-[state=active]:text-slate-950 data-[state=active]:shadow-sm"
+            >
+              <NotebookPen className="h-4 w-4" />
+              Context
+            </TabsTrigger>
           </TabsList>
         </Tabs>
       </div>
@@ -334,6 +342,10 @@ export default function PageContent({
               isCfg={false}
               onOpen={regDlg}
             />
+          </TabsContent>
+
+          <TabsContent value="context" className="m-0 h-full">
+            <ContextTab meetingId={meeting.id} />
           </TabsContent>
         </Tabs>
       </div>
